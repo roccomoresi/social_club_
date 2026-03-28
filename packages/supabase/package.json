@@ -1,0 +1,15 @@
+{
+  "name": "@scrap-world/supabase",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.ts",
+    "./dashboard": "./src/dashboard.ts",
+    "./mobile": "./src/mobile.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "@supabase/ssr": "^0.6.1"
+  }
+}

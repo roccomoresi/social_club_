@@ -1,0 +1,12 @@
+{
+  "name": "scrap-world",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev:mobile": "pnpm -C apps/mobile start",
+    "dev:dashboard": "pnpm -C apps/dashboard dev",
+    "lint:mobile": "pnpm -C apps/mobile lint",
+    "lint:dashboard": "pnpm -C apps/dashboard lint"
+  }
+}

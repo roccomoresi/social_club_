@@ -8,5 +8,8 @@
     "dev:dashboard": "pnpm -C apps/dashboard dev",
     "lint:mobile": "pnpm -C apps/mobile lint",
     "lint:dashboard": "pnpm -C apps/dashboard lint"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.0.2"
   }
 }

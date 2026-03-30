@@ -1,14 +1,66 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { MemberCard } from './components/MemberCard';
 import { supabase } from './supabase';
+import { ScannerModal } from './components/ScannerModal';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fetchingProfile, setFetchingProfile] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [userData, setUserData] = useState({ name: '', number: '', role: '' });
+  const [isScannerVisible, setIsScannerVisible] = useState(false);
+
+  useEffect(() => {
+    checkUser();
+  }, []);
+
+  async function checkUser() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setIsLoggedIn(true);
+      fetchProfile(session.user.id);
+    }
+  }
+
+  async function handleScan(scannedId: string) {
+    // Cerramos el scanner
+    setIsScannerVisible(false);
+    
+    // Buscamos al socio escaneado
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('full_name, role')
+      .eq('member_number', scannedId) // o .eq('id', scannedId) según qué guardes en el QR
+      .single();
+  
+    if (data) {
+      Alert.alert('ACCESO CONCEDIDO', `Socio: ${data.full_name}\nRole: ${data.role}`);
+    } else {
+      Alert.alert('ERROR', 'Socio no encontrado o código inválido');
+    }
+  }
+
+  async function fetchProfile(userId: string) {
+    setFetchingProfile(true);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('full_name, member_number, role')
+      .eq('id', userId)
+      .single();
+
+    if (data) {
+      setUserData({
+        name: data.full_name || 'NUEVO SOCIO',
+        number: data.member_number || 'SW-PENDING',
+        role: data.role || 'MEMBER'
+      });
+    }
+    setFetchingProfile(false);
+  }
 
   async function handleLogin() {
     if (!email || !password) {
@@ -17,15 +69,16 @@ export default function App() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
 
     if (error) {
       Alert.alert('Error de acceso', 'Credenciales incorrectas');
       setLoading(false);
-    } else {
+    } else if (data.user) {
+      await fetchProfile(data.user.id);
       setIsLoggedIn(true);
       setLoading(false);
     }
@@ -34,6 +87,7 @@ export default function App() {
   async function handleLogout() {
     await supabase.auth.signOut();
     setIsLoggedIn(false);
+    setUserData({ name: '', number: '', role: '' });
     setEmail('');
     setPassword('');
   }
@@ -46,11 +100,32 @@ export default function App() {
             <Text style={styles.navTitle}>SCRAP WORLD</Text>
           </View>
           <View style={styles.centerContent}>
-            <MemberCard 
-              name="Ignacio Pachelo" 
-              role="FOUNDING MEMBER" 
-              id="SW-0001" 
-            />
+            {fetchingProfile ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <MemberCard 
+                name={userData.name} 
+                role={userData.role} 
+                id={userData.number} 
+              />
+              
+              
+            )}
+
+{userData.role === 'ADMIN' && (
+  <TouchableOpacity 
+    style={[styles.primaryButton, { marginTop: 20, backgroundColor: '#D4AF37' }]} 
+    onPress={() => setIsScannerVisible(true)}
+  >
+    <Text style={styles.primaryButtonText}>MODO ESCÁNER</Text>
+  </TouchableOpacity>
+)}
+
+<ScannerModal 
+  visible={isScannerVisible} 
+  onClose={() => setIsScannerVisible(false)} 
+  onScan={handleScan} 
+/>
           </View>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutText}>CERRAR SESIÓN</Text>

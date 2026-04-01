@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { MemberCard } from '../../components/MemberCard';
@@ -16,6 +17,7 @@ import { supabase } from '../../supabase';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { user, profile, refreshProfile, signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [isScannerVisible, setIsScannerVisible] = useState(false);
@@ -106,6 +108,14 @@ export default function HomeScreen() {
         <View style={styles.centerContent}>
           <>
             <MemberCard name={userData.name} role={userData.role} id={userData.number} />
+
+            <TouchableOpacity
+              style={styles.eventDevButton}
+              onPress={() => router.push('/event')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.eventDevButtonText}>Ir al Evento</Text>
+            </TouchableOpacity>
 
             <View style={styles.dataSection}>
               <Text style={styles.dataLabel}>INSTAGRAM</Text>
@@ -202,5 +212,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '400',
     fontStyle: 'italic',
+  },
+  eventDevButton: {
+    marginTop: 20,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    backgroundColor: 'transparent',
+  },
+  eventDevButtonText: {
+    color: '#D4AF37',
+    fontSize: 13,
+    fontWeight: 'bold',
+    letterSpacing: 2,
   },
 });

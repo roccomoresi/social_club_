@@ -14,7 +14,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
-import { fetchActiveEvent, searchPartner, sendInvitation } from '../../supabase';
+import {
+  fetchActiveEvent,
+  searchPartner,
+  sendInvitation,
+  fetchPendingInvitation,
+  respondToInvitation
+} from '../../supabase';
 
 type MatchPhase = 'search' | 'result';
 
@@ -38,7 +44,7 @@ export default function EventScreen() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const [invitePending, setInvitePending] = useState(true);
+  const [invitePending, setInvitePending] = useState(false);
   const [matchPhase, setMatchPhase] = useState<MatchPhase>('search');
   const [query, setQuery] = useState('');
   const [matchedUser, setMatchedUser] = useState<MatchedProfile | null>(null);
@@ -49,23 +55,40 @@ export default function EventScreen() {
   const [searching, setSearching] = useState(false);
   const [sending, setSending] = useState(false);
 
+  // Estado para bloquear los botones mientras se acepta/rechaza la invitación
+  const [responding, setResponding] = useState(false);
+
+  const [incomingInvitation, setIncomingInvitation] = useState<any>(null);
+
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
+        // 1. Traer el evento activo
         const ev = await fetchActiveEvent();
-        if (alive) setActiveEvent(ev);
+        if (!alive || !ev) {
+          setEventLoading(false);
+          return;
+        }
+        setActiveEvent(ev);
+
+        // 2. Buscar invitaciones pendientes para este evento
+        if (user?.id) {
+          const inv = await fetchPendingInvitation(ev.id, user.id);
+          if (inv) {
+            setIncomingInvitation(inv);
+            setInvitePending(true);
+          }
+        }
       } catch (e) {
         console.error(e);
-        Alert.alert('Eventos', 'No pudimos cargar el evento activo. Intentá de nuevo más tarde.');
+        Alert.alert('Error', 'No pudimos sincronizar los datos.');
       } finally {
         if (alive) setEventLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, []);
+    return () => { alive = false; };
+  }, [user?.id]);
 
   function resetSearchFlow() {
     setMatchPhase('search');
@@ -150,14 +173,39 @@ export default function EventScreen() {
     );
   }
 
-  function handleAcceptInvite() {
-    Alert.alert('Invitación aceptada', 'Quedaron confirmados como pareja para el evento.');
-    setInvitePending(false);
+  async function handleAcceptInvite() {
+    if (!incomingInvitation?.id) return;
+    if (responding) return;
+
+    setResponding(true);
+    try {
+      await respondToInvitation(incomingInvitation.id, 'accepted');
+      Alert.alert('¡Genial!', 'Quedaron confirmados como pareja para el evento.');
+      setInvitePending(false);
+      setIncomingInvitation(null);
+    } catch (error) {
+      Alert.alert('Error', 'No pudimos aceptar la invitación. Intentá de nuevo.');
+    } finally {
+      setResponding(false);
+    }
   }
 
-  function handleRejectInvite() {
-    Alert.alert('Invitación rechazada', 'Le avisaremos a tu invitante.');
-    setInvitePending(false);
+  async function handleRejectInvite() {
+    if (!incomingInvitation?.id) return;
+    if (responding) return;
+
+    setResponding(true);
+    try {
+      await respondToInvitation(incomingInvitation.id, 'rejected');
+      Alert.alert('Invitación rechazada', 'Le avisaremos a tu invitante.');
+      setInvitePending(false);
+      setIncomingInvitation(null);
+      resetSearchFlow(); // Vuelve a mostrar el buscador
+    } catch (error) {
+      Alert.alert('Error', 'No pudimos rechazar la invitación.');
+    } finally {
+      setResponding(false);
+    }
   }
 
   const eventTitle = eventLoading
@@ -189,7 +237,7 @@ export default function EventScreen() {
               <Text className="text-xs font-semibold tracking-widest text-zinc-400">VOLVER</Text>
             </Pressable>
             <View className="rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1">
-              <Text className="text-[10px] font-bold tracking-[0.2em] text-[#D4AF37]">SOCIAL</Text>
+              <Text className="text-[10px] font-bold tracking-widest text-[#D4AF37]">SOCIAL</Text>
             </View>
           </View>
 
@@ -198,11 +246,11 @@ export default function EventScreen() {
             <View className="mb-8 overflow-hidden rounded-2xl border border-[#D4AF37]/40 bg-[#0c0a07] shadow-lg shadow-black/80">
               <View className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[#D4AF37]/15" />
               <View className="p-5">
-                <Text className="mb-1 text-[10px] font-black uppercase tracking-[0.25em] text-[#D4AF37]">
+                <Text className="mb-1 text-[10px] font-black uppercase tracking-wider text-[#D4AF37]">
                   Bandeja de entrada
                 </Text>
                 <Text className="mb-4 text-lg font-semibold leading-snug text-white">
-                  Usuario Secreto te ha invitado a ir juntos
+                  {incomingInvitation?.sender?.full_name || 'Alguien'} te ha invitado a ir juntos
                 </Text>
                 <Text className="mb-5 text-sm leading-relaxed text-zinc-500">
                   Podés aceptar para aparecer como pareja en el próximo encuentro, o rechazar si preferís
@@ -211,15 +259,25 @@ export default function EventScreen() {
                 <View className="flex-row gap-3">
                   <Pressable
                     onPress={handleAcceptInvite}
-                    className="min-h-[48px] flex-1 items-center justify-center rounded-xl bg-[#D4AF37] active:opacity-90"
+                    disabled={responding}
+                    className="min-h-[48px] flex-1 items-center justify-center rounded-xl bg-[#D4AF37] active:opacity-90 disabled:opacity-60"
                   >
-                    <Text className="text-sm font-bold uppercase tracking-wide text-black">Aceptar</Text>
+                    {responding ? (
+                      <ActivityIndicator color="#000" />
+                    ) : (
+                      <Text className="text-sm font-bold uppercase tracking-wide text-black">Aceptar</Text>
+                    )}
                   </Pressable>
                   <Pressable
                     onPress={handleRejectInvite}
-                    className="min-h-[48px] flex-1 items-center justify-center rounded-xl border border-zinc-600 bg-zinc-900/80 active:opacity-80"
+                    disabled={responding}
+                    className="min-h-[48px] flex-1 items-center justify-center rounded-xl border border-zinc-600 bg-zinc-900/80 active:opacity-80 disabled:opacity-60"
                   >
-                    <Text className="text-sm font-bold uppercase tracking-wide text-zinc-300">Rechazar</Text>
+                    {responding ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text className="text-sm font-bold uppercase tracking-wide text-zinc-300">Rechazar</Text>
+                    )}
                   </Pressable>
                 </View>
               </View>
@@ -227,9 +285,9 @@ export default function EventScreen() {
           )}
 
           {/* Estado 1: buscador */}
-          {matchPhase === 'search' && (
+          {matchPhase === 'search' && !invitePending && (
             <View className="rounded-3xl border border-white/[0.08] bg-[#0a0a0a] p-6">
-              <Text className="mb-1 text-center text-[10px] font-bold uppercase tracking-[0.35em] text-zinc-500">
+              <Text className="mb-1 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                 Próximo evento
               </Text>
               <Text className="mb-8 text-center text-2xl font-bold leading-tight text-white">{eventTitle}</Text>
@@ -256,7 +314,7 @@ export default function EventScreen() {
                 {searching ? (
                   <ActivityIndicator color="#000" />
                 ) : (
-                  <Text className="text-sm font-bold uppercase tracking-[0.15em] text-black">Buscar Pareja</Text>
+                  <Text className="text-sm font-bold uppercase tracking-wider text-black">Buscar Pareja</Text>
                 )}
               </Pressable>
 
@@ -264,7 +322,7 @@ export default function EventScreen() {
                 onPress={handleSoloOrAssign}
                 className="min-h-[52px] items-center justify-center rounded-2xl border-2 border-[#D4AF37]/50 bg-transparent active:bg-[#D4AF37]/5"
               >
-                <Text className="text-center text-xs font-bold uppercase leading-snug tracking-[0.12em] text-[#D4AF37]">
+                <Text className="text-center text-xs font-bold uppercase leading-snug tracking-wider text-[#D4AF37]">
                   VOY SOLO /{'\n'}ASÍGNENME PAREJA
                 </Text>
               </Pressable>
@@ -274,7 +332,7 @@ export default function EventScreen() {
           {/* Estado 2: resultado de búsqueda */}
           {matchPhase === 'result' && matchedUser && (
             <View className="rounded-3xl border border-white/[0.08] bg-[#0a0a0a] p-6">
-              <Text className="mb-6 text-center text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">
+              <Text className="mb-6 text-center text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                 Coincidencia encontrada
               </Text>
 

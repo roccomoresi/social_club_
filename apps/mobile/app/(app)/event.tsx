@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -15,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { MemberAvatar } from '../../components/MemberAvatar';
 import {
   type ActiveEventRow,
   type MyTeamRow,
@@ -29,8 +29,6 @@ import {
   searchPartner,
   sendInvitation,
 } from '../../supabase';
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 type MatchPhase = 'search' | 'result';
 
@@ -51,62 +49,16 @@ type PendingInvitation = {
   }[];
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function initialsFromName(name: string | null | undefined): string {
-  if (!name?.trim()) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
-}
-
-function MemberAvatar({
-  avatarUrl,
-  name,
-  size = 64,
-}: {
-  avatarUrl: string | null;
-  name: string | null;
-  size?: number;
-}) {
-  const radius = size * 0.25;
-  if (avatarUrl) {
-    return (
-      <Image
-        source={{ uri: avatarUrl }}
-        style={{ width: size, height: size, borderRadius: radius, borderWidth: 1, borderColor: 'rgba(212,175,55,0.35)' }}
-        resizeMode="cover"
-      />
-    );
-  }
-  return (
-    <View
-      style={{ width: size, height: size, borderRadius: radius }}
-      className="items-center justify-center border border-[#D4AF37]/35 bg-[#141210]"
-    >
-      <Text style={{ fontSize: size * 0.28 }} className="font-black text-[#D4AF37]">
-        {initialsFromName(name)}
-      </Text>
-    </View>
-  );
-}
-
-// ─── Screen ──────────────────────────────────────────────────────────────────
-
 export default function EventScreen() {
   const router = useRouter();
   const { user, profile } = useAuth();
 
-  // ── Data state ──
   const [activeEvent, setActiveEvent] = useState<ActiveEventRow | null>(null);
   const [eventLoading, setEventLoading] = useState(true);
   const [myTeam, setMyTeam] = useState<MyTeamRow | null>(null);
   const [mySentInvitation, setMySentInvitation] = useState<SentInvitationRow | null>(null);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
 
-  // ── Search flow state ──
   const [matchPhase, setMatchPhase] = useState<MatchPhase>('search');
   const [query, setQuery] = useState('');
   const [matchedUser, setMatchedUser] = useState<MatchedProfile | null>(null);
@@ -118,7 +70,6 @@ export default function EventScreen() {
   const [cancellingInvite, setCancellingInvite] = useState(false);
   const [joiningPool, setJoiningPool] = useState(false);
 
-  // ── Load all event state in one shot ──
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -149,8 +100,6 @@ export default function EventScreen() {
       alive = false;
     };
   }, [user?.id]);
-
-  // ── Handlers ──
 
   function resetSearchFlow() {
     setMatchPhase('search');
@@ -296,10 +245,8 @@ export default function EventScreen() {
     );
   }
 
-  // ── Derived values ──
   const eventTitle = activeEvent?.title ?? 'Sin eventos programados';
 
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView className="flex-1 bg-[#030303]">
       <KeyboardAvoidingView
@@ -312,7 +259,6 @@ export default function EventScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header — siempre visible */}
           <View className="mb-6 flex-row items-center justify-between">
             <Pressable
               onPress={() => router.back()}
@@ -325,17 +271,14 @@ export default function EventScreen() {
             </View>
           </View>
 
-          {/* ── CARGANDO ─────────────────────────────────────────────────── */}
           {eventLoading && (
             <View className="flex-1 items-center justify-center py-24">
               <ActivityIndicator color="#D4AF37" size="large" />
             </View>
           )}
 
-          {/* ── EQUIPO FORMADO → PASSLINE DESBLOQUEADO ───────────────────── */}
           {!eventLoading && myTeam && (
             <View className="overflow-hidden rounded-3xl border border-[#D4AF37]/50 bg-[#080600]">
-              {/* Franja superior */}
               <View className="items-center bg-[#D4AF37]/10 px-6 py-5">
                 <Text className="text-[10px] font-black uppercase tracking-[4] text-[#D4AF37]">
                   {myTeam.is_solo_pool ? '⏳ En Lista de Solitarios' : '✓ Equipo Confirmado'}
@@ -343,10 +286,8 @@ export default function EventScreen() {
                 <Text className="mt-1.5 text-center text-xl font-bold text-white">{eventTitle}</Text>
               </View>
 
-              {/* Miembros: caso pareja confirmada */}
               {!myTeam.is_solo_pool && (
                 <View className="flex-row items-start justify-center gap-6 px-6 py-8">
-                  {/* Yo */}
                   <View className="flex-1 items-center gap-2">
                     <Text className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Vos</Text>
                     <MemberAvatar avatarUrl={profile?.avatar_url ?? null} name={profile?.full_name ?? null} size={72} />
@@ -356,12 +297,10 @@ export default function EventScreen() {
                     <Text className="font-mono text-xs text-zinc-500">{profile?.member_number || '—'}</Text>
                   </View>
 
-                  {/* Separador */}
                   <View className="mt-8 items-center justify-center px-1">
                     <Text className="text-2xl text-[#D4AF37]/30">×</Text>
                   </View>
 
-                  {/* Pareja */}
                   <View className="flex-1 items-center gap-2">
                     <Text className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Tu pareja</Text>
                     <MemberAvatar
@@ -379,7 +318,6 @@ export default function EventScreen() {
                 </View>
               )}
 
-              {/* Miembros: caso solo pool */}
               {myTeam.is_solo_pool && (
                 <View className="items-center gap-3 px-6 py-8">
                   <MemberAvatar avatarUrl={profile?.avatar_url ?? null} name={profile?.full_name ?? null} size={80} />
@@ -395,10 +333,8 @@ export default function EventScreen() {
                 </View>
               )}
 
-              {/* Divider */}
               <View className="mx-6 border-t border-white/[0.06]" />
 
-              {/* CTA Principal */}
               <View className="p-6">
                 <Pressable
                   onPress={handleOpenPassline}
@@ -415,10 +351,8 @@ export default function EventScreen() {
             </View>
           )}
 
-          {/* ── ESTADOS ACTIVOS (sin equipo formado aún) ─────────────────── */}
           {!eventLoading && !myTeam && (
             <>
-              {/* Invitaciones recibidas pendientes */}
               {pendingInvitations.map((invite) => {
                 const senderName = invite.profiles?.[0]?.full_name?.trim() || 'Un socio';
                 return (
@@ -463,7 +397,6 @@ export default function EventScreen() {
                 );
               })}
 
-              {/* ── ESPERANDO RESPUESTA ── */}
               {mySentInvitation && (
                 <View className="rounded-3xl border border-white/[0.08] bg-[#0a0a0a] p-6">
                   <Text className="mb-1 text-center text-[10px] font-bold uppercase tracking-[4] text-zinc-500">
@@ -514,7 +447,6 @@ export default function EventScreen() {
                 </View>
               )}
 
-              {/* ── BUSCADOR ── */}
               {!mySentInvitation && matchPhase === 'search' && (
                 <View className="rounded-3xl border border-white/[0.08] bg-[#0a0a0a] p-6">
                   <Text className="mb-1 text-center text-[10px] font-bold uppercase tracking-[4] text-zinc-500">
@@ -566,7 +498,6 @@ export default function EventScreen() {
                 </View>
               )}
 
-              {/* ── RESULTADO DE BÚSQUEDA ── */}
               {!mySentInvitation && matchPhase === 'result' && matchedUser && (
                 <View className="rounded-3xl border border-white/[0.08] bg-[#0a0a0a] p-6">
                   <Text className="mb-6 text-center text-[10px] font-bold uppercase tracking-[3] text-zinc-500">

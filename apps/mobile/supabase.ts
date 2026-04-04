@@ -174,10 +174,10 @@ export const cancelSentInvitation = async (invitationId: string): Promise<void> 
 };
 
 export const respondToInvitation = async (
-  invitationId: string, 
-  eventId: string, 
-  senderId: string, 
-  receiverId: string, 
+  invitationId: string,
+  eventId: string,
+  senderId: string,
+  receiverId: string,
   status: 'accepted' | 'rejected'
 ) => {
   const { error: updateError } = await supabase
@@ -201,4 +201,178 @@ export const respondToInvitation = async (
   }
 
   return true;
+};
+
+export type SessionStatus = 'pending' | 'in_progress' | 'completed';
+
+export type SessionPlayer = {
+  id: string;
+  profile_id: string;
+  is_ready: boolean;
+  joined_at: string;
+  profiles: {
+    full_name: string | null;
+    avatar_url: string | null;
+    member_number: string | null;
+  } | null;
+};
+
+export type GameSession = {
+  id: string;
+  event_id: string;
+  table_number: number;
+  round_id: string | null;
+  round_number: number | null;
+  status: SessionStatus;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  players: SessionPlayer[];
+};
+
+export type Pista = {
+  clue: string;
+  ownerId: string;
+};
+
+export const joinOrCreateSession = async (
+  eventId: string,
+  tableNumber: number,
+  profileId: string
+): Promise<GameSession> => {
+  const { data: existing, error: fetchError } = await supabase
+    .from('game_sessions')
+    .select('id')
+    .eq('event_id', eventId)
+    .eq('table_number', tableNumber)
+    .in('status', ['pending', 'in_progress'])
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+
+  let sessionId: string;
+
+  if (existing) {
+    sessionId = existing.id;
+  } else {
+    const { data: created, error: createError } = await supabase
+      .from('game_sessions')
+      .insert({ event_id: eventId, table_number: tableNumber })
+      .select('id')
+      .single();
+    if (createError) throw createError;
+    sessionId = created.id;
+  }
+
+  await supabase
+    .from('table_players')
+    .upsert({ session_id: sessionId, profile_id: profileId }, { onConflict: 'session_id,profile_id' });
+
+  return fetchSessionWithPlayers(sessionId);
+};
+
+export const fetchSessionWithPlayers = async (sessionId: string): Promise<GameSession> => {
+  const { data, error } = await supabase
+    .from('game_sessions')
+    .select('id, event_id, table_number, round_id, status, started_at, ended_at, created_at, event_rounds(round_number)')
+    .eq('id', sessionId)
+    .single();
+
+  if (error) throw error;
+
+  const { data: players, error: playersError } = await supabase
+    .from('table_players')
+    .select('id, profile_id, is_ready, joined_at, profiles(full_name, avatar_url, member_number)')
+    .eq('session_id', sessionId)
+    .order('joined_at', { ascending: true });
+
+  if (playersError) throw playersError;
+
+  const roundInfo = data.event_rounds as { round_number: number } | null;
+
+  return {
+    id: data.id,
+    event_id: data.event_id,
+    table_number: data.table_number,
+    round_id: data.round_id ?? null,
+    round_number: roundInfo?.round_number ?? null,
+    status: data.status as SessionStatus,
+    started_at: data.started_at ?? null,
+    ended_at: data.ended_at ?? null,
+    created_at: data.created_at,
+    players: (players ?? []) as SessionPlayer[],
+  };
+};
+
+export const setPlayerReady = async (sessionId: string, profileId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('table_players')
+    .update({ is_ready: true })
+    .eq('session_id', sessionId)
+    .eq('profile_id', profileId);
+  if (error) throw error;
+};
+
+export const startSession = async (sessionId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('game_sessions')
+    .update({ status: 'in_progress', started_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .eq('status', 'pending');
+  if (error) throw error;
+};
+
+export const leaveSession = async (sessionId: string, profileId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('table_players')
+    .delete()
+    .eq('session_id', sessionId)
+    .eq('profile_id', profileId);
+  if (error) throw error;
+};
+
+export const endSession = async (sessionId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('game_sessions')
+    .update({ status: 'completed', ended_at: new Date().toISOString() })
+    .eq('id', sessionId)
+    .eq('status', 'in_progress');
+  if (error) throw error;
+};
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+export const fetchTablePistas = async (sessionId: string): Promise<Pista[]> => {
+  const { data: players, error: playersError } = await supabase
+    .from('table_players')
+    .select('profile_id')
+    .eq('session_id', sessionId);
+
+  if (playersError) throw playersError;
+
+  const profileIds = (players ?? []).map((p) => p.profile_id);
+  if (!profileIds.length) return [];
+
+  const { data: profiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, trivia_1, trivia_2, trivia_3')
+    .in('id', profileIds);
+
+  if (profilesError) throw profilesError;
+
+  const pistas: Pista[] = [];
+  for (const p of profiles ?? []) {
+    if (p.trivia_1) pistas.push({ clue: p.trivia_1, ownerId: p.id });
+    if (p.trivia_2) pistas.push({ clue: p.trivia_2, ownerId: p.id });
+    if (p.trivia_3) pistas.push({ clue: p.trivia_3, ownerId: p.id });
+  }
+
+  return shuffle(pistas);
 };

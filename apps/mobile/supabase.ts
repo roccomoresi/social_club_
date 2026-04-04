@@ -14,41 +14,36 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export async function searchPartner(query: string) {
-  // Limpiamos el '@' por si el usuario lo escribe por costumbre
-  const cleanQuery = query.replace('@', '').trim();
-
+export const searchPartner = async (searchTerm: string) => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, member_number, avatar_url')
-    // Búsqueda exacta para member_number, búsqueda parcial (con comodines) para instagram_user
-    .or(`member_number.eq.${cleanQuery},instagram_user.ilike.%${cleanQuery}%`)
-    .limit(1) // Evita crasheos si los comodines encuentran más de un usuario parecido
-    .maybeSingle();
+    .select('id, full_name, member_number, instagram_user, avatar_url')
+    .or(`member_number.eq.${searchTerm},instagram_user.ilike.%${searchTerm}%`)
+    .limit(1)
+    .single();
 
-  if (error) {
-    console.error('Error buscando socio:', error.message);
-    throw new Error('Hubo un error al buscar el perfil.');
+  if (error && error.code !== 'PGRST116') {
+    throw error;
   }
-
+  
   return data;
-}
+};
 
-export async function sendInvitation(eventId: string, senderId: string, receiverId: string) {
+export const sendInvitation = async (eventId: string, senderId: string, receiverId: string) => {
   const { error } = await supabase
     .from('event_invitations')
     .insert({
       event_id: eventId,
       sender_id: senderId,
-      receiver_id: receiverId,
-      status: 'pending' // Estado inicial
+      receiver_id: receiverId
     });
 
   if (error) {
-    console.error('Error enviando invitación:', error.message);
-    throw new Error('No se pudo enviar la invitación.');
+    throw error;
   }
-}
+  
+  return true;
+};
 
 export type ActiveEventRow = { id: string; title: string };
 
@@ -90,39 +85,32 @@ export const getPendingInvitations = async (userId: string, eventId: string) => 
   return data;
 };
 
-export async function respondToInvitation(invitationId: string, status: 'accepted' | 'rejected') {
-  const { error } = await supabase
+export const respondToInvitation = async (
+  invitationId: string, 
+  eventId: string, 
+  senderId: string, 
+  receiverId: string, 
+  status: 'accepted' | 'rejected'
+) => {
+  const { error: updateError } = await supabase
     .from('event_invitations')
     .update({ status })
     .eq('id', invitationId);
 
-  if (error) throw error;
-}
+  if (updateError) throw updateError;
 
-export async function fetchPendingInvitation(eventId: string, userId: string) {
-  const { data, error } = await supabase
-    .from('event_invitations')
-    .select(`
-      id,
-      status,
-      sender_id,
-      event_id,
-      sender:profiles!sender_id (
-        id,
-        full_name,
-        avatar_url
-      )
-    `)
-    .eq('event_id', eventId)
-    .eq('receiver_id', userId)
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false })
-    .maybeSingle();
+  if (status === 'accepted') {
+    const { error: teamError } = await supabase
+      .from('event_teams')
+      .insert({
+        event_id: eventId,
+        player1_id: senderId,
+        player2_id: receiverId,
+        passline_unlocked: true
+      });
 
-  if (error) {
-    console.error('Error trayendo invitación:', error.message);
-    return null;
+    if (teamError) throw teamError;
   }
 
-  return data;
-}
+  return true;
+};

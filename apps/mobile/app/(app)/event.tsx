@@ -298,7 +298,6 @@ export default function EventScreen() {
 
   // ── Derived values ──
   const eventTitle = activeEvent?.title ?? 'Sin eventos programados';
-  const avatarInitials = initialsFromName(matchedUser?.full_name);
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -576,17 +575,7 @@ export default function EventScreen() {
 
                   <View className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-[#050505]">
                     <View className="flex-row items-center gap-4 p-4">
-                      {matchedUser.avatar_url ? (
-                        <Image
-                          source={{ uri: matchedUser.avatar_url }}
-                          style={{ width: 64, height: 64, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(212,175,55,0.35)' }}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View className="h-16 w-16 items-center justify-center rounded-2xl border border-[#D4AF37]/35 bg-[#141210]">
-                          <Text className="text-lg font-black text-[#D4AF37]">{avatarInitials}</Text>
-                        </View>
-                      )}
+                      <MemberAvatar avatarUrl={matchedUser.avatar_url} name={matchedUser.full_name} size={64} />
                       <View className="flex-1">
                         <Text className="mb-1 text-[9px] font-bold uppercase tracking-widest text-zinc-500">
                           Member

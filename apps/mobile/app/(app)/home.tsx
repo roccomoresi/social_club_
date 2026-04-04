@@ -1,12 +1,5 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -63,19 +56,16 @@ export default function HomeScreen() {
         const img = result.assets[0];
         const ext = img.uri.split('.').pop();
         const fileName = `${userData.id}-${Date.now()}.${ext}`;
-        const filePath = `${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(filePath, decode(base64Data), {
+          .upload(fileName, decode(base64Data), {
             contentType: `image/${ext}`,
           });
 
         if (uploadError) throw uploadError;
 
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
 
         const { error: updateError } = await supabase
           .from('profiles')
@@ -100,133 +90,88 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.fullScreen}>
-        <View style={styles.navBar}>
-          <Text style={styles.navTitle}>SCRAP WORLD</Text>
-        </View>
-        <View style={styles.centerContent}>
-          <>
-            <MemberCard name={userData.name} role={userData.role} id={userData.number} />
+    <SafeAreaView className="flex-1 bg-black">
 
-            <TouchableOpacity
-              style={styles.eventDevButton}
-              onPress={() => router.push('/event')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.eventDevButtonText}>Ir al Evento</Text>
-            </TouchableOpacity>
-
-            <View style={styles.dataSection}>
-              <Text style={styles.dataLabel}>INSTAGRAM</Text>
-              <Text style={styles.dataValue}>@{userData.instagram || 'No configurado'}</Text>
-
-              <Text style={[styles.dataLabel, { marginTop: 15 }]}>TU DATO SECRETO</Text>
-              <Text style={styles.dataValue}>"{userData.secretFact || 'Sin dato'}"</Text>
-
-              <TouchableOpacity
-                style={[styles.secondaryButton, { marginTop: 20 }]}
-                onPress={pickImage}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.secondaryButtonText}>ACTUALIZAR FOTO</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {userData.role === 'ADMIN' && (
-              <TouchableOpacity
-                style={[styles.primaryButton, { marginTop: 20, backgroundColor: '#D4AF37' }]}
-                onPress={() => setIsScannerVisible(true)}
-              >
-                <Text style={styles.primaryButtonText}>MODO ESCÁNER</Text>
-              </TouchableOpacity>
-            )}
-
-            <ScannerModal
-              visible={isScannerVisible}
-              onClose={() => setIsScannerVisible(false)}
-              onScan={handleScan}
-            />
-          </>
-        </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>CERRAR SESIÓN</Text>
-        </TouchableOpacity>
+      {/* Navbar */}
+      <View className="h-14 items-center justify-center border-b border-zinc-900">
+        <Text className="text-xs font-black tracking-[5px] text-white">SCRAP WORLD</Text>
       </View>
+
+      {/* Contenido scrollable */}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 24, paddingBottom: 12 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Tarjeta de membresía */}
+        <MemberCard name={userData.name} role={userData.role} id={userData.number} />
+
+        {/* Datos de perfil */}
+        <View className="mt-5 rounded-2xl border border-zinc-900 bg-zinc-950 p-5">
+          <View>
+            <Text className="text-[10px] font-bold tracking-[2px] text-[#D4AF37]">INSTAGRAM</Text>
+            <Text className="mt-1 text-base text-white">
+              @{userData.instagram || 'No configurado'}
+            </Text>
+          </View>
+          <View className="my-4 h-px bg-zinc-900" />
+          <View>
+            <Text className="text-[10px] font-bold tracking-[2px] text-[#D4AF37]">TU DATO SECRETO</Text>
+            <Text className="mt-1 text-sm italic leading-relaxed text-zinc-400">
+              "{userData.secretFact || 'Sin dato'}"
+            </Text>
+          </View>
+        </View>
+
+        {/* Acciones */}
+        <View className="mt-4 gap-3">
+          <Pressable
+            className="h-12 items-center justify-center rounded-xl border border-zinc-800 active:bg-white/5 disabled:opacity-50"
+            onPress={pickImage}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text className="text-xs font-semibold tracking-[2px] text-zinc-400">
+                ACTUALIZAR FOTO
+              </Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            className="h-12 items-center justify-center rounded-xl border border-[#D4AF37]/40 active:bg-[#D4AF37]/5"
+            onPress={() => router.push('/event')}
+          >
+            <Text className="text-xs font-semibold tracking-[2px] text-[#D4AF37]">
+              IR AL EVENTO
+            </Text>
+          </Pressable>
+
+          {userData.role === 'ADMIN' && (
+            <Pressable
+              className="h-12 items-center justify-center rounded-xl bg-[#D4AF37] active:opacity-90"
+              onPress={() => setIsScannerVisible(true)}
+            >
+              <Text className="text-xs font-bold tracking-[2px] text-black">MODO ESCÁNER</Text>
+            </Pressable>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Logout */}
+      <Pressable
+        className="items-center border-t border-zinc-900 py-5 active:bg-white/5"
+        onPress={handleLogout}
+      >
+        <Text className="text-[11px] tracking-[2px] text-zinc-600">CERRAR SESIÓN</Text>
+      </Pressable>
+
+      <ScannerModal
+        visible={isScannerVisible}
+        onClose={() => setIsScannerVisible(false)}
+        onScan={handleScan}
+      />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
-  fullScreen: { flex: 1 },
-  centerContent: { flex: 1, justifyContent: 'center', padding: 24 },
-  primaryButton: {
-    backgroundColor: '#ffffff',
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  primaryButtonText: { color: '#000000', fontSize: 14, fontWeight: 'bold', letterSpacing: 2 },
-  secondaryButton: {
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#333333',
-  },
-  secondaryButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '600', letterSpacing: 2 },
-  navBar: {
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#111111',
-  },
-  navTitle: { color: '#ffffff', fontSize: 14, fontWeight: 'bold', letterSpacing: 3 },
-  logoutButton: { padding: 24, alignItems: 'center' },
-  logoutText: { color: '#71717a', fontSize: 12, letterSpacing: 2 },
-  dataSection: {
-    marginTop: 30,
-    padding: 20,
-    backgroundColor: '#0A0A0A',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-  },
-  dataLabel: {
-    color: '#D4AF37',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  dataValue: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '400',
-    fontStyle: 'italic',
-  },
-  eventDevButton: {
-    marginTop: 20,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-    backgroundColor: 'transparent',
-  },
-  eventDevButtonText: {
-    color: '#D4AF37',
-    fontSize: 13,
-    fontWeight: 'bold',
-    letterSpacing: 2,
-  },
-});

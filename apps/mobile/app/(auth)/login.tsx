@@ -1,13 +1,5 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
@@ -48,94 +40,60 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>SCRAP WORLD</Text>
-          <Text style={styles.subtitle}>PRIVATE MEMBERS CLUB</Text>
+    <SafeAreaView className="flex-1 bg-black">
+      <View className="flex-1 justify-between px-6 pb-12 pt-16">
+
+        {/* Logo */}
+        <View className="items-center gap-3">
+          <Text className="text-[28px] font-black tracking-[6px] text-white">
+            SCRAP WORLD
+          </Text>
+          <Text className="text-[10px] tracking-[4px] text-zinc-500">
+            PRIVATE MEMBERS CLUB
+          </Text>
+          <View className="mt-1 h-px w-12 bg-[#D4AF37]/40" />
         </View>
-        <View style={styles.form}>
+
+        {/* Formulario */}
+        <View className="gap-3">
           <TextInput
-            style={styles.input}
+            className="h-14 rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm tracking-widest text-white"
             placeholder="EMAIL"
-            placeholderTextColor="#444"
+            placeholderTextColor="#3f3f46"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
           />
           <TextInput
-            style={styles.input}
+            className="h-14 rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-sm tracking-widest text-white"
             placeholder="PASSWORD"
-            placeholderTextColor="#444"
+            placeholderTextColor="#3f3f46"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
           />
-          <TouchableOpacity style={styles.primaryButton} onPress={handleLogin} disabled={loading}>
+          <Pressable
+            className="mt-2 h-14 items-center justify-center rounded-xl bg-white active:opacity-75 disabled:opacity-50"
+            onPress={handleLogin}
+            disabled={loading}
+          >
             {loading ? (
               <ActivityIndicator color="#000" />
             ) : (
-              <Text style={styles.primaryButtonText}>MEMBER LOGIN</Text>
+              <Text className="text-sm font-bold tracking-[3px] text-black">MEMBER LOGIN</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>APPLY FOR MEMBERSHIP</Text>
-          </TouchableOpacity>
-        </View>
+
+        {/* Footer */}
+        <Pressable className="h-14 items-center justify-center rounded-xl border border-zinc-800 active:bg-white/5">
+          <Text className="text-xs font-semibold tracking-[3px] text-zinc-500">
+            APPLY FOR MEMBERSHIP
+          </Text>
+        </Pressable>
+
       </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000000' },
-  content: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingBottom: 48,
-    paddingTop: 80,
-  },
-  header: { alignItems: 'center' },
-  title: {
-    color: '#ffffff',
-    fontSize: 32,
-    fontWeight: 'bold',
-    letterSpacing: 5,
-    textTransform: 'uppercase',
-  },
-  subtitle: { color: '#71717a', fontSize: 12, marginTop: 12, letterSpacing: 4 },
-  form: { gap: 16, marginTop: -40 },
-  input: {
-    backgroundColor: '#111',
-    borderWidth: 1,
-    borderColor: '#222',
-    height: 56,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    color: '#fff',
-    fontSize: 14,
-    letterSpacing: 1,
-  },
-  footer: { width: '100%' },
-  primaryButton: {
-    backgroundColor: '#ffffff',
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  primaryButtonText: { color: '#000000', fontSize: 14, fontWeight: 'bold', letterSpacing: 2 },
-  secondaryButton: {
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#333333',
-  },
-  secondaryButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '600', letterSpacing: 2 },
-});

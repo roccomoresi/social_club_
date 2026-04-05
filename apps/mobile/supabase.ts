@@ -314,12 +314,22 @@ export const setPlayerReady = async (sessionId: string, profileId: string): Prom
 };
 
 export const startSession = async (sessionId: string): Promise<void> => {
-  const { error } = await supabase
+  console.log('[startSession] called for', sessionId);
+  const { data, error } = await supabase
     .from('game_sessions')
     .update({ status: 'in_progress', started_at: new Date().toISOString() })
     .eq('id', sessionId)
-    .eq('status', 'pending');
-  if (error) throw error;
+    .eq('status', 'pending')
+    .select('id, status');
+  if (error) {
+    console.error('[startSession] ERROR:', error.message, error.code, error.details);
+    throw error;
+  }
+  if (!data || data.length === 0) {
+    console.warn('[startSession] WARNING: 0 rows updated — session status might not be "pending". Check DB.');
+  } else {
+    console.log('[startSession] SUCCESS, updated rows:', data);
+  }
 };
 
 export const leaveSession = async (sessionId: string, profileId: string): Promise<void> => {

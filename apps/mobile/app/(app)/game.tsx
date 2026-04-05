@@ -32,21 +32,32 @@ export default function GameScreen() {
     if (!sessionId || debugFilling) return;
     setDebugFilling(true);
     try {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id')
-        .neq('id', user?.id ?? '')
-        .limit(5);
+      const currentPlayers = engine.session?.players ?? [];
+      const otherIds = currentPlayers
+        .map((p) => p.profile_id)
+        .filter((id) => id !== user?.id);
 
-      if (!profiles?.length) {
-        Alert.alert('Debug', 'No hay otros perfiles en la base de datos.');
+      if (currentPlayers.length < 6) {
+        // Session not full yet — pull extra profiles from DB to fill remaining slots
+        const needed = 6 - currentPlayers.length;
+        const { data: extras } = await supabase
+          .from('profiles')
+          .select('id')
+          .neq('id', user?.id ?? '')
+          .not('id', 'in', `(${currentPlayers.map((p) => p.profile_id).join(',')})`)
+          .limit(needed);
+        otherIds.push(...(extras ?? []).map((p) => p.id));
+      }
+
+      if (!otherIds.length) {
+        Alert.alert('Debug', 'No hay otros jugadores en la sesión.');
         return;
       }
 
       await supabase
         .from('table_players')
         .upsert(
-          profiles.map((p) => ({ session_id: sessionId, profile_id: p.id, is_ready: true })),
+          otherIds.map((id) => ({ session_id: sessionId, profile_id: id, is_ready: true })),
           { onConflict: 'session_id,profile_id' }
         );
     } catch (e: unknown) {
@@ -470,7 +481,7 @@ export default function GameScreen() {
               <Text className="mt-4 text-2xl font-black tracking-wider text-white">
                 ¡FIN DEL EVENTO!
               </Text>
-              <Text className="mt-2 text-sm text-zinc-500">Gracias por jugar, Scrap World.</Text>
+              <Text className="mt-2 text-sm text-zinc-500">Gracias por jugar, Social Club.</Text>
             </View>
             <Pressable
               onPress={() => router.replace('/home')}

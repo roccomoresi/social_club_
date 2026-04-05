@@ -154,6 +154,7 @@ export function useGameEngine(sessionId: string, profileId: string) {
         { event: 'UPDATE', schema: 'public', table: 'game_sessions', filter: `id=eq.${sessionId}` },
         (payload) => {
           if (!alive) return;
+          console.log('[realtime] SESSION_UPDATED received:', payload.new);
           dispatch({
             type: 'SESSION_UPDATED',
             payload: {
@@ -164,7 +165,9 @@ export function useGameEngine(sessionId: string, profileId: string) {
           });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[realtime] gsession channel status:', status);
+      });
 
     const playersCh = supabase
       .channel(`gplayers:${sessionId}`)
@@ -241,12 +244,28 @@ export function useGameEngine(sessionId: string, profileId: string) {
     state.session?.players.find((p) => p.profile_id === profileId)?.is_ready ?? false;
 
   const markReady = useCallback(async () => {
+    console.log('[markReady] called', { sessionId, profileId });
     await setPlayerReady(sessionId, profileId);
+
     const fresh = await fetchSessionWithPlayers(sessionId);
+    console.log('[markReady] fresh session', {
+      status: fresh.status,
+      playerCount: fresh.players.length,
+      readyCount: fresh.players.filter((p) => p.is_ready).length,
+      players: fresh.players.map((p) => ({ id: p.profile_id.slice(0, 8), ready: p.is_ready })),
+    });
     dispatch({ type: 'LOAD_SUCCESS', payload: fresh });
+
     const nowAllReady = fresh.players.length === 6 && fresh.players.every((p) => p.is_ready);
+    console.log('[markReady] nowAllReady:', nowAllReady, '— fresh.status:', fresh.status);
+
     if (nowAllReady && fresh.status === 'pending') {
+      console.log('[markReady] calling startSession...');
       await startSession(sessionId);
+
+      const started = await fetchSessionWithPlayers(sessionId);
+      console.log('[markReady] session status after startSession:', started.status);
+      dispatch({ type: 'LOAD_SUCCESS', payload: started });
     }
   }, [sessionId, profileId]);
 

@@ -36,7 +36,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView className="flex-1 bg-black" edges={['top']}>
       <View className="h-14 items-center justify-center border-b border-zinc-900">
-        <Text className="text-xs font-black tracking-[5px] text-white">SCRAP WORLD</Text>
+        <Text className="text-xs font-black tracking-[5px] text-white">SOCIAL CLUB</Text>
       </View>
 
       <View className="flex-1 items-center justify-between px-6 py-8">

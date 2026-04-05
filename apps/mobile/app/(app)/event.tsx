@@ -520,7 +520,7 @@ export default function EventScreen() {
                       </View>
                     </View>
                     <View className="border-t border-white/5 px-4 py-3">
-                      <Text className="text-xs text-zinc-600">Perfil verificado en Scrap World</Text>
+                      <Text className="text-xs text-zinc-600">Perfil verificado en Social Club</Text>
                     </View>
                   </View>
 

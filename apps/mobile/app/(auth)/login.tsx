@@ -46,7 +46,7 @@ export default function LoginScreen() {
         {/* Logo */}
         <View className="items-center gap-3">
           <Text className="text-[28px] font-black tracking-[6px] text-white">
-            SCRAP WORLD
+            SOCIAL CLUB
           </Text>
           <Text className="text-[10px] tracking-[4px] text-zinc-500">
             PRIVATE MEMBERS CLUB

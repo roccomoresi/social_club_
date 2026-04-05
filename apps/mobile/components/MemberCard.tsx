@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 interface MemberCardProps {
@@ -13,27 +13,31 @@ const { width } = Dimensions.get('window');
 export const MemberCard = ({ name, role, id }: MemberCardProps) => {
   return (
     <View style={styles.card}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.clubName}>SCRAP WORLD</Text>
-        <Text style={styles.memberRole}>{role}</Text>
+        <View style={styles.roleBadge}>
+          <Text style={styles.roleText}>{role}</Text>
+        </View>
       </View>
 
+      {/* QR */}
       <View style={styles.qrContainer}>
-        {/* Generamos el QR con el ID del socio */}
         <QRCode
-          value={id}
-          size={width * 0.4}
+          value={id || ' '}
+          size={width * 0.42}
           color="white"
           backgroundColor="transparent"
         />
       </View>
 
+      {/* Footer */}
       <View style={styles.footer}>
         <View>
           <Text style={styles.label}>MEMBER NAME</Text>
           <Text style={styles.name}>{name.toUpperCase()}</Text>
         </View>
-        <View style={styles.memberNumberContainer}>
+        <View style={styles.numberBlock}>
           <Text style={styles.label}>ID NO.</Text>
           <Text style={styles.number}>{id}</Text>
         </View>
@@ -44,45 +48,54 @@ export const MemberCard = ({ name, role, id }: MemberCardProps) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#050505',
-    borderRadius: 20,
+    backgroundColor: '#080808',
+    borderRadius: 24,
     padding: 24,
     width: '100%',
-    aspectRatio: 0.63, // Proporción tipo tarjeta vertical
+    aspectRatio: 0.63,
     borderWidth: 1,
-    borderColor: '#1A1A1A',
+    borderColor: '#1c1c1c',
     justifyContent: 'space-between',
-    // Sombra sutil para que flote
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
+    // Sombra sutil dorada en iOS
+    shadowColor: '#D4AF37',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
     shadowRadius: 20,
-    elevation: 10,
+    // Elevación para Android
+    elevation: 14,
   },
   header: {
     alignItems: 'center',
+    gap: 8,
   },
   clubName: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    color: '#ffffff',
+    fontSize: 18,
     fontWeight: '900',
-    letterSpacing: 6,
+    letterSpacing: 7,
   },
-  memberRole: {
-    color: '#D4AF37', // Un dorado Scrap World
-    fontSize: 10,
-    marginTop: 8,
+  roleBadge: {
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.3)',
+    backgroundColor: 'rgba(212,175,55,0.07)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 100,
+  },
+  roleText: {
+    color: '#D4AF37',
+    fontSize: 9,
     letterSpacing: 3,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   qrContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
     borderWidth: 1,
-    borderColor: '#111',
-    borderRadius: 15,
-    backgroundColor: '#0A0A0A',
+    borderColor: '#141414',
+    borderRadius: 16,
+    backgroundColor: '#040404',
   },
   footer: {
     flexDirection: 'row',
@@ -90,24 +103,25 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   label: {
-    color: '#444',
+    color: '#3f3f46',
     fontSize: 8,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     marginBottom: 4,
+    fontWeight: '600',
   },
   name: {
-    color: '#FFF',
-    fontSize: 16,
+    color: '#ffffff',
+    fontSize: 15,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
-  memberNumberContainer: {
+  numberBlock: {
     alignItems: 'flex-end',
   },
   number: {
-    color: '#FFF',
-    fontSize: 14,
-    fontFamily: 'Courier', // Le da toque de ID técnica
+    color: '#d4d4d8',
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     letterSpacing: 1,
   },
 });

@@ -4,16 +4,22 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  StyleSheet,
+  Pressable,
+  ScrollView,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
 import { useAuth } from '../../contexts/AuthContext';
+
+const TRIVIA_FIELDS = [
+  { label: 'TRIVIA 1', key: 'trivia1' },
+  { label: 'TRIVIA 2', key: 'trivia2' },
+  { label: 'TRIVIA 3', key: 'trivia3' },
+] as const;
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -22,6 +28,9 @@ export default function OnboardingScreen() {
   const [trivia1, setTrivia1] = useState('');
   const [trivia2, setTrivia2] = useState('');
   const [trivia3, setTrivia3] = useState('');
+
+  const setters = { trivia1: setTrivia1, trivia2: setTrivia2, trivia3: setTrivia3 };
+  const values  = { trivia1, trivia2, trivia3 };
 
   async function handleSave() {
     if (!user?.id) {
@@ -62,86 +71,59 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView className="flex-1 bg-black">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+        className="flex-1"
       >
-        <View style={styles.inner}>
-          <View style={styles.header}>
-            <Text style={styles.title}>ONBOARDING</Text>
-            <Text style={styles.subtitle}>
-              Tres respuestas para el juego del club. Podés editarlas después si hace falta.
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 32, paddingTop: 48, paddingBottom: 48 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <View className="mb-10">
+            <Text className="text-2xl font-black tracking-[3px] text-white">TU PERFIL</Text>
+            <View className="mt-3 h-px w-10 bg-[#D4AF37]/50" />
+            <Text className="mt-4 text-sm leading-relaxed text-zinc-500">
+              Estas respuestas alimentan el juego del club.{'\n'}Podés editarlas después si hace falta.
             </Text>
           </View>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>TRIVIA 1</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Respuesta"
-              placeholderTextColor="#444"
-              value={trivia1}
-              onChangeText={setTrivia1}
-            />
-
-            <Text style={styles.label}>TRIVIA 2</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Respuesta"
-              placeholderTextColor="#444"
-              value={trivia2}
-              onChangeText={setTrivia2}
-            />
-
-            <Text style={styles.label}>TRIVIA 3</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Respuesta"
-              placeholderTextColor="#444"
-              value={trivia3}
-              onChangeText={setTrivia3}
-            />
+          {/* Campos */}
+          <View className="gap-6">
+            {TRIVIA_FIELDS.map(({ label, key }) => (
+              <View key={key}>
+                <Text className="mb-2 text-[10px] font-black tracking-[3px] text-[#D4AF37]">
+                  {label}
+                </Text>
+                <TextInput
+                  className="min-h-[52px] rounded-xl border border-zinc-800 bg-zinc-950 px-4 text-base text-white"
+                  placeholder="Respuesta"
+                  placeholderTextColor="#3f3f46"
+                  value={values[key]}
+                  onChangeText={setters[key]}
+                />
+              </View>
+            ))}
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={handleSave} disabled={loading}>
+          {/* CTA */}
+          <Pressable
+            className="mt-10 h-14 items-center justify-center rounded-xl bg-white active:opacity-75 disabled:opacity-50"
+            onPress={handleSave}
+            disabled={loading}
+          >
             {loading ? (
               <ActivityIndicator color="#000" />
             ) : (
-              <Text style={styles.buttonText}>CONTINUAR</Text>
+              <Text className="font-bold tracking-[3px] text-black">CONTINUAR</Text>
             )}
-          </TouchableOpacity>
-        </View>
+          </Pressable>
+
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000' },
-  container: { flex: 1 },
-  inner: { flex: 1, padding: 32, justifyContent: 'center' },
-  header: { marginBottom: 32 },
-  title: { color: '#fff', fontSize: 24, fontWeight: 'bold', letterSpacing: 2 },
-  subtitle: { color: '#71717a', fontSize: 14, marginTop: 12, lineHeight: 20 },
-  form: { gap: 16 },
-  label: { color: '#D4AF37', fontSize: 10, fontWeight: 'bold', letterSpacing: 2 },
-  input: {
-    backgroundColor: '#111',
-    borderWidth: 1,
-    borderColor: '#222',
-    borderRadius: 8,
-    padding: 16,
-    color: '#fff',
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#fff',
-    height: 56,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  buttonText: { fontWeight: 'bold', letterSpacing: 2 },
-});

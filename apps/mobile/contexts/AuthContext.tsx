@@ -64,15 +64,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     async function init() {
-      const {
-        data: { session: initial },
-      } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setSession(initial);
-      if (initial?.user) {
-        await refreshProfile(initial.user.id);
+      try {
+        const {
+          data: { session: initial },
+        } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setSession(initial);
+        if (initial?.user) {
+          await refreshProfile(initial.user.id);
+        }
+      } catch (e) {
+        console.error('AuthContext init error:', e);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      if (mounted) setLoading(false);
     }
 
     init();
@@ -83,8 +88,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(next);
       if (next?.user) {
         setLoading(true);
-        await refreshProfile(next.user.id);
-        setLoading(false);
+        try {
+          await refreshProfile(next.user.id);
+        } catch (e) {
+          console.error('AuthContext onAuthStateChange error:', e);
+        } finally {
+          setLoading(false);
+        }
       } else {
         setProfile(null);
         setLoading(false);

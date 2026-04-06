@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,6 +27,34 @@ export default function GameScreen() {
   const [assigning, setAssigning] = useState(false);
   const [nextAssignment, setNextAssignment] = useState<{ sessionId: string; tableNumber: number } | null>(null);
   const [debugFilling, setDebugFilling] = useState(false);
+  const [forceEnding, setForceEnding] = useState(false);
+
+  useEffect(() => {
+    console.log(
+      '[GAME_STATE] game.tsx | phase:', engine.phase,
+      '| loading:', engine.loading,
+      JSON.stringify({
+        sessionId: sessionId ?? null,
+        playerCount: engine.session?.players.length ?? 0,
+        dbStatus: engine.session?.status ?? null,
+        error: engine.error ?? null,
+      })
+    );
+  }, [engine.phase, engine.loading]);
+
+  useEffect(() => {
+    if (engine.pistas.length > 0) {
+      const voteStatus = engine.pistas.map((p) => {
+        const voteKey = p.ownerId + '::' + p.clue;
+        return {
+          clue: p.clue.slice(0, 40),
+          voteKey,
+          voted: engine.votes[voteKey] ?? null,
+        };
+      });
+      console.log('[VOTE_SYSTEM] UI render snapshot | pistas total:', engine.pistas.length, '| vote status por pista:', JSON.stringify(voteStatus));
+    }
+  }, [engine.pistas, engine.votes]);
 
   async function handleDebugFillTable() {
     if (!sessionId || debugFilling) return;
@@ -38,7 +66,6 @@ export default function GameScreen() {
         .filter((id) => id !== user?.id);
 
       if (currentPlayers.length < 6) {
-        // Session not full yet — pull extra profiles from DB to fill remaining slots
         const needed = 6 - currentPlayers.length;
         const { data: extras } = await supabase
           .from('profiles')
@@ -69,6 +96,7 @@ export default function GameScreen() {
 
   async function handleReady() {
     if (readying || engine.amReady) return;
+    console.log('[READY_CHECK] handleReady botón presionado | userId:', user?.id?.slice(0, 8) ?? 'null', '| amReady:', engine.amReady, '| sessionId:', sessionId);
     setReadying(true);
     try {
       await engine.markReady();
@@ -79,14 +107,32 @@ export default function GameScreen() {
     }
   }
 
+  async function forceEndSession() {
+    if (forceEnding || !sessionId) return;
+    setForceEnding(true);
+    try {
+      const { error } = await supabase
+        .from('game_sessions')
+        .update({ status: 'completed', ended_at: new Date().toISOString() })
+        .eq('id', sessionId);
+      if (error) throw error;
+    } catch (e: unknown) {
+      Alert.alert('Debug Error', e instanceof Error ? e.message : 'Error al forzar fin.');
+    } finally {
+      setForceEnding(false);
+    }
+  }
+
   async function handleNextRound() {
     if (!user?.id || assigning) return;
     const roundNumber = engine.session?.round_number ?? 1;
+    console.log('[GAME_STATE] handleNextRound | roundNumber actual:', roundNumber, '→ solicitando ronda:', roundNumber + 1);
     setAssigning(true);
     try {
       const event = await fetchActiveEvent();
       if (!event) throw new Error('Sin evento activo.');
       const result = await assignTableForRound(user.id, event.id, roundNumber + 1);
+      console.log('[GAME_STATE] nueva asignación recibida:', JSON.stringify(result));
       setNextAssignment(result);
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'No pudimos asignarte una mesa.');
@@ -133,6 +179,13 @@ export default function GameScreen() {
   if (engine.phase === 'waiting') {
     const slots = Array.from({ length: 6 }, (_, i) => session.players[i] ?? null);
     const readyCount = session.players.filter((p) => p.is_ready).length;
+
+    console.log(
+      '[READY_CHECK] rendering waiting phase | readyCount:', readyCount, '/ 6',
+      '| players:', JSON.stringify(
+        session.players.map((p) => ({ id: p.profile_id.slice(0, 8), name: p.profiles?.full_name ?? 'N/A', ready: p.is_ready }))
+      )
+    );
 
     return (
       <SafeAreaView className="flex-1 bg-black" edges={['top']}>
@@ -249,6 +302,18 @@ export default function GameScreen() {
     );
   }
 
+  if (engine.phase === 'active' && engine.secondsLeft === 0) {
+    console.log('[TIMER_SYNC] UI mostrando FINALIZANDO RONDA | secondsLeft:', engine.secondsLeft, '| sessionId:', sessionId);
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center gap-6 bg-black" edges={['top']}>
+        <ActivityIndicator color="#D4AF37" size="large" />
+        <Text className="text-xs font-black uppercase tracking-[4] text-[#D4AF37]">
+          FINALIZANDO RONDA
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
   if (engine.phase === 'active') {
     return (
       <SafeAreaView className="flex-1 bg-black" edges={['top']}>
@@ -303,11 +368,15 @@ export default function GameScreen() {
 
           <View className="gap-4">
             {engine.pistas.map((pista, idx) => {
-              const voted = engine.votes[idx];
+              const voteKey = `${pista.ownerId}::${pista.clue}`;
+              const votedPlayerId = engine.votes[voteKey];
+              const isThisPistaVoted = votedPlayerId !== undefined;
               return (
                 <View
                   key={idx}
-                  className="overflow-hidden rounded-2xl border border-white/[0.06] bg-zinc-950"
+                  className={`overflow-hidden rounded-2xl border bg-zinc-950 ${
+                    isThisPistaVoted ? 'border-[#D4AF37]/25' : 'border-white/[0.06]'
+                  }`}
                 >
                   <View className="p-4">
                     <Text className="mb-4 text-base leading-relaxed text-white">
@@ -318,11 +387,14 @@ export default function GameScreen() {
                     </Text>
                     <View className="flex-row flex-wrap gap-2">
                       {session.players.map((player) => {
-                        const isSelected = voted === player.profile_id;
+                        const isSelected = isThisPistaVoted && votedPlayerId === player.profile_id;
                         return (
                           <Pressable
                             key={player.id}
-                            onPress={() => engine.castVote(idx, player.profile_id)}
+                            onPress={() => {
+                              console.log('[VOTE_SYSTEM] UI onPress | voteKey:', voteKey, '| voted player:', player.profile_id.slice(0, 8), '| name:', player.profiles?.full_name ?? 'N/A', '| isSelected ya:', isSelected);
+                              engine.castVote(pista.ownerId, pista.clue, player.profile_id);
+                            }}
                           >
                             <View
                               style={
@@ -352,22 +424,43 @@ export default function GameScreen() {
             })}
           </View>
         </ScrollView>
+
+        {__DEV__ && (
+          <View className="border-t border-red-900/40 bg-black px-6 py-3">
+            <Pressable
+              onPress={forceEndSession}
+              disabled={forceEnding}
+              className="h-10 items-center justify-center rounded-xl border border-red-600/60 active:opacity-60 disabled:opacity-30"
+            >
+              {forceEnding ? (
+                <ActivityIndicator color="#dc2626" size="small" />
+              ) : (
+                <Text className="text-[10px] font-bold tracking-widest text-red-500">
+                  DEBUG: FORZAR FIN DE RONDA
+                </Text>
+              )}
+            </Pressable>
+          </View>
+        )}
       </SafeAreaView>
     );
   }
 
   const isLastRound = roundNumber >= TOTAL_ROUNDS;
-  const results = engine.pistas.map((pista, i) => {
+  const results = engine.pistas.map((pista) => {
+    const voteKey = pista.ownerId + '::' + pista.clue;
     const owner = session.players.find((p) => p.profile_id === pista.ownerId);
     return {
       clue: pista.clue,
       ownerName: owner?.profiles?.full_name?.trim() || 'Socio',
-      voted: engine.votes[i] ?? null,
-      correct: engine.votes[i] === pista.ownerId,
+      voted: engine.votes[voteKey] ?? null,
+      correct: engine.votes[voteKey] === pista.ownerId,
     };
   });
   const votedCount = results.filter((r) => r.voted !== null).length;
   const correctCount = results.filter((r) => r.voted !== null && r.correct).length;
+
+  console.log('[GAME_STATE] rendering finished phase | round:', roundNumber, '| isLastRound:', isLastRound, '| votedCount:', votedCount, '| correctCount:', correctCount, '| results:', JSON.stringify(results));
 
   return (
     <SafeAreaView className="flex-1 bg-black" edges={['top']}>

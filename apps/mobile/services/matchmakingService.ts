@@ -181,8 +181,66 @@ export async function assignTableForRound(
       .single();
 
     if (sessionError) {
-      console.log(`[matchmaking] TABLE ${tableNum}: SKIP - create session error: ${sessionError.message}`);
-      continue;
+      if (sessionError.code !== '23505') {
+        console.log(`[matchmaking] TABLE ${tableNum}: SKIP - create session error: ${sessionError.message}`);
+        continue;
+      }
+
+      console.log(`[matchmaking] TABLE ${tableNum}: race condition detected, fetching winner session`);
+
+      const { data: raceSession } = await supabase
+        .from('game_sessions')
+        .select('id, table_number')
+        .eq('round_id', round.id)
+        .eq('table_number', tableNum)
+        .maybeSingle();
+
+      if (!raceSession) {
+        console.log(`[matchmaking] TABLE ${tableNum}: SKIP - race session vanished`);
+        continue;
+      }
+
+      const { data: racePlayers } = await supabase
+        .from('table_players')
+        .select('profile_id')
+        .eq('session_id', raceSession.id);
+
+      const raceIds = (racePlayers ?? []).map((p) => p.profile_id);
+
+      if (raceIds.length > 0) {
+        const orFilter = raceIds
+          .flatMap((id) => [`player1_id.eq.${id}`, `player2_id.eq.${id}`])
+          .join(',');
+        const { data: teamsAtRaceTable } = await supabase
+          .from('event_teams')
+          .select('id')
+          .eq('event_id', eventId)
+          .or(orFilter);
+        if ((teamsAtRaceTable?.length ?? 0) >= 3) {
+          console.log(`[matchmaking] TABLE ${tableNum}: SKIP - race session full`);
+          continue;
+        }
+      }
+
+      if (raceIds.some((pid) => metSet.has(pid))) {
+        console.log(`[matchmaking] TABLE ${tableNum}: SKIP - race session tiene conflicto con historial`);
+        continue;
+      }
+
+      const { error: raceUpsertError } = await supabase
+        .from('table_players')
+        .upsert(
+          duplaMembers.map((pid) => ({ session_id: raceSession.id, profile_id: pid })),
+          { onConflict: 'session_id,profile_id' }
+        );
+
+      if (raceUpsertError) {
+        console.log(`[matchmaking] TABLE ${tableNum}: SKIP - race upsert error: ${raceUpsertError.message}`);
+        continue;
+      }
+
+      console.log(`[matchmaking] TABLE ${tableNum}: SUCCESS (joined race winner session)`);
+      return { sessionId: raceSession.id, tableNumber: raceSession.table_number };
     }
 
     const { error: insertError } = await supabase

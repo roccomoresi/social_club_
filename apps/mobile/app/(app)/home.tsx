@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { MemberCard } from '../../components/MemberCard';
+import { MemberCredential } from '../../components/MemberCredential';
 import { ScannerModal } from '../../components/ScannerModal';
 import { fetchActiveEvent } from '../../supabase';
 import { assignTableForRound } from '../../services/matchmakingService';
@@ -39,12 +39,14 @@ export default function HomeScreen() {
         <Text className="text-xs font-black tracking-[5px] text-white">SOCIAL CLUB</Text>
       </View>
 
-      <View className="flex-1 items-center justify-between px-6 py-8">
-        <MemberCard
-          name={profile?.full_name || 'NUEVO SOCIO'}
-          role={profile?.role || 'MEMBER'}
-          id={profile?.member_number || 'SW-PENDING'}
-        />
+      <View className="flex-1 items-center justify-between px-5 py-8">
+        <View className="flex-1 w-full items-center justify-center">
+          <MemberCredential
+            name={profile?.full_name || 'NUEVO SOCIO'}
+            role={profile?.role || 'MEMBER'}
+            memberNumber={profile?.member_number || 'SW-000'}
+          />
+        </View>
 
         <Pressable
           className="w-full min-h-[56px] items-center justify-center rounded-2xl bg-[#D4AF37] active:opacity-90 disabled:opacity-50"

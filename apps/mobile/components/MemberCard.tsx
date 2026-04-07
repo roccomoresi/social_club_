@@ -1,6 +1,5 @@
 import React from 'react';
-import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 interface MemberCardProps {
   name: string;
@@ -8,36 +7,28 @@ interface MemberCardProps {
   id: string;
 }
 
-const { width } = Dimensions.get('window');
-
 export const MemberCard = ({ name, role, id }: MemberCardProps) => {
   return (
     <View style={styles.card}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.clubName}>SCRAP WORLD</Text>
+        <Text style={styles.clubName}>SOCIAL CLUB</Text>
         <View style={styles.roleBadge}>
           <Text style={styles.roleText}>{role}</Text>
         </View>
       </View>
 
-      {/* QR */}
-      <View style={styles.qrContainer}>
-        <QRCode
-          value={id || ' '}
-          size={width * 0.42}
-          color="white"
-          backgroundColor="transparent"
-        />
+      <View style={styles.centerpiece}>
+        <View style={styles.accentLine} />
+        <Text style={styles.monogram}>SW</Text>
+        <View style={styles.accentLine} />
       </View>
 
-      {/* Footer */}
       <View style={styles.footer}>
         <View>
           <Text style={styles.label}>MEMBER NAME</Text>
           <Text style={styles.name}>{name.toUpperCase()}</Text>
         </View>
-        <View style={styles.numberBlock}>
+        <View style={styles.idBlock}>
           <Text style={styles.label}>ID NO.</Text>
           <Text style={styles.number}>{id}</Text>
         </View>
@@ -48,38 +39,36 @@ export const MemberCard = ({ name, role, id }: MemberCardProps) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#080808',
+    backgroundColor: '#060606',
     borderRadius: 24,
-    padding: 24,
+    padding: 28,
     width: '100%',
     aspectRatio: 0.63,
     borderWidth: 1,
-    borderColor: '#1c1c1c',
+    borderColor: 'rgba(212,175,55,0.25)',
     justifyContent: 'space-between',
-    // Sombra sutil dorada en iOS
     shadowColor: '#D4AF37',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    // Elevación para Android
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
     elevation: 14,
   },
   header: {
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   clubName: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '900',
-    letterSpacing: 7,
+    letterSpacing: 8,
   },
   roleBadge: {
     borderWidth: 1,
-    borderColor: 'rgba(212,175,55,0.3)',
-    backgroundColor: 'rgba(212,175,55,0.07)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    borderColor: 'rgba(212,175,55,0.35)',
+    backgroundColor: 'rgba(212,175,55,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 5,
     borderRadius: 100,
   },
   roleText: {
@@ -88,14 +77,21 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     fontWeight: '700',
   },
-  qrContainer: {
+  centerpiece: {
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#141414',
-    borderRadius: 16,
-    backgroundColor: '#040404',
+    gap: 20,
+    paddingVertical: 8,
+  },
+  accentLine: {
+    width: '100%',
+    height: 1,
+    backgroundColor: 'rgba(212,175,55,0.15)',
+  },
+  monogram: {
+    color: 'rgba(212,175,55,0.18)',
+    fontSize: 96,
+    fontWeight: '900',
+    letterSpacing: 16,
   },
   footer: {
     flexDirection: 'row',
@@ -105,23 +101,23 @@ const styles = StyleSheet.create({
   label: {
     color: '#3f3f46',
     fontSize: 8,
-    letterSpacing: 1.5,
-    marginBottom: 4,
+    letterSpacing: 2,
+    marginBottom: 5,
     fontWeight: '600',
   },
   name: {
     color: '#ffffff',
     fontSize: 15,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
-  numberBlock: {
+  idBlock: {
     alignItems: 'flex-end',
   },
   number: {
-    color: '#d4d4d8',
+    color: '#a1a1aa',
     fontSize: 13,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
 });

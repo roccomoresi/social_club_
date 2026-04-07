@@ -305,21 +305,21 @@ export const fetchSessionWithPlayers = async (sessionId: string): Promise<GameSe
 };
 
 export const setPlayerReady = async (sessionId: string, profileId: string): Promise<void> => {
+  console.log('[READY_CHECK] setPlayerReady DB call | sessionId:', sessionId, '| profileId:', profileId);
   const { error } = await supabase
     .from('table_players')
     .update({ is_ready: true })
     .eq('session_id', sessionId)
     .eq('profile_id', profileId);
   if (error) throw error;
+  console.log('[READY_CHECK] setPlayerReady OK');
 };
 
 export const startSession = async (sessionId: string): Promise<void> => {
-  const { error } = await supabase
-    .from('game_sessions')
-    .update({ status: 'in_progress', started_at: new Date().toISOString() })
-    .eq('id', sessionId)
-    .eq('status', 'pending');
+  console.log('[READY_CHECK] startSession RPC | sessionId:', sessionId);
+  const { error } = await supabase.rpc('start_game_session', { p_session_id: sessionId });
   if (error) throw error;
+  console.log('[READY_CHECK] startSession RPC OK → DB seteó started_at con now()');
 };
 
 export const leaveSession = async (sessionId: string, profileId: string): Promise<void> => {
@@ -332,12 +332,15 @@ export const leaveSession = async (sessionId: string, profileId: string): Promis
 };
 
 export const endSession = async (sessionId: string): Promise<void> => {
+  const clientTimestamp = new Date().toISOString();
+  console.log('[TIMER_SYNC] endSession DB call | sessionId:', sessionId, '| ended_at cliente:', clientTimestamp);
   const { error } = await supabase
     .from('game_sessions')
-    .update({ status: 'completed', ended_at: new Date().toISOString() })
+    .update({ status: 'completed', ended_at: clientTimestamp })
     .eq('id', sessionId)
     .eq('status', 'in_progress');
   if (error) throw error;
+  console.log('[TIMER_SYNC] endSession OK → sesión marcada completed');
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -350,6 +353,7 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export const fetchTablePistas = async (sessionId: string): Promise<Pista[]> => {
+  console.log('[DATA_FETCH] fetchTablePistas | sessionId:', sessionId);
   const { data: players, error: playersError } = await supabase
     .from('table_players')
     .select('profile_id')
@@ -358,6 +362,7 @@ export const fetchTablePistas = async (sessionId: string): Promise<Pista[]> => {
   if (playersError) throw playersError;
 
   const profileIds = (players ?? []).map((p) => p.profile_id);
+  console.log('[DATA_FETCH] fetchTablePistas | profileIds en sesión:', JSON.stringify(profileIds));
   if (!profileIds.length) return [];
 
   const { data: profiles, error: profilesError } = await supabase
@@ -374,5 +379,51 @@ export const fetchTablePistas = async (sessionId: string): Promise<Pista[]> => {
     if (p.trivia_3) pistas.push({ clue: p.trivia_3, ownerId: p.id });
   }
 
-  return shuffle(pistas);
+  console.log('[DATA_FETCH] fetchTablePistas | pistas pre-shuffle:', JSON.stringify(pistas));
+  const result = shuffle(pistas);
+  console.log('[DATA_FETCH] fetchTablePistas | pistas post-shuffle:', JSON.stringify(result));
+  return result;
+};
+
+export type VoteRow = {
+  pista_owner_id: string;
+  pista_clue: string;
+  guessed_profile_id: string;
+};
+
+export const submitVote = async (
+  sessionId: string,
+  voterId: string,
+  pistaOwnerId: string,
+  pistaClue: string,
+  guessedProfileId: string
+): Promise<void> => {
+  console.log('[VOTE_SYSTEM] submitVote DB upsert | sessionId:', sessionId, '| voterId:', voterId, '| pistaOwnerId:', pistaOwnerId, '| pistaClue:', pistaClue, '| guessedProfileId:', guessedProfileId);
+  const { error } = await supabase
+    .from('round_votes')
+    .upsert(
+      {
+        session_id: sessionId,
+        voter_id: voterId,
+        pista_owner_id: pistaOwnerId,
+        pista_clue: pistaClue,
+        guessed_profile_id: guessedProfileId,
+      },
+      { onConflict: 'session_id,voter_id,pista_owner_id,pista_clue' }
+    );
+  if (error) throw error;
+  console.log('[VOTE_SYSTEM] submitVote OK → voto persistido en round_votes');
+};
+
+export const fetchSessionVotes = async (sessionId: string, voterId: string): Promise<VoteRow[]> => {
+  console.log('[DATA_FETCH] fetchSessionVotes | sessionId:', sessionId, '| voterId:', voterId);
+  const { data, error } = await supabase
+    .from('round_votes')
+    .select('pista_owner_id, pista_clue, guessed_profile_id')
+    .eq('session_id', sessionId)
+    .eq('voter_id', voterId);
+  if (error) throw error;
+  const rows = (data ?? []) as VoteRow[];
+  console.log('[DATA_FETCH] fetchSessionVotes | rows encontrados:', rows.length, '| data:', JSON.stringify(rows));
+  return rows;
 };

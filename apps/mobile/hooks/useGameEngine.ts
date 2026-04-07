@@ -40,6 +40,17 @@ type Action =
   | { type: 'TICK' }
   | { type: 'CAST_VOTE'; payload: { pistaOwnerId: string; pistaClue: string; votedId: string } };
 
+type ProfileData = {
+  full_name: string | null;
+  avatar_url: string | null;
+  member_number: string | null;
+};
+
+type PendingPlayerEvent = {
+  kind: 'JOIN' | 'UPDATE';
+  row: { id: string; profile_id: string; is_ready: boolean; joined_at: string };
+};
+
 function derivePhase(status: string): GamePhase {
   if (status === 'in_progress') return 'active';
   if (status === 'completed') return 'finished';
@@ -98,6 +109,13 @@ function reducer(state: State, action: Action): State {
     }
     case 'PLAYER_UPDATED': {
       if (!state.session) return state;
+      const exists = state.session.players.some((p) => p.id === action.payload.id);
+      if (!exists) {
+        return {
+          ...state,
+          session: { ...state.session, players: [...state.session.players, action.payload] },
+        };
+      }
       return {
         ...state,
         session: {
@@ -147,6 +165,11 @@ const initialState: State = {
 export function useGameEngine(sessionId: string, profileId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const prevPhaseRef = useRef<GamePhase | 'loading'>('loading');
+  const aliveRef = useRef(true);
+  const profileCacheRef = useRef(new Map<string, ProfileData>());
+  const pendingEventsRef = useRef<PendingPlayerEvent[]>([]);
+  const pendingIdsRef = useRef(new Set<string>());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const prev = prevPhaseRef.current;
@@ -178,11 +201,59 @@ export function useGameEngine(sessionId: string, profileId: string) {
   }, [state.votes]);
 
   useEffect(() => {
-    let alive = true;
+    aliveRef.current = true;
+
+    const scheduleFlush = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
+        if (!aliveRef.current) return;
+
+        const missingIds = [...pendingIdsRef.current].filter(
+          (id) => !profileCacheRef.current.has(id)
+        );
+
+        if (missingIds.length > 0) {
+          console.log('[PROFILE_CACHE] batch fetch ids:', missingIds.length);
+          const { data } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, member_number')
+            .in('id', missingIds);
+          if (!aliveRef.current) return;
+          for (const p of data ?? []) {
+            profileCacheRef.current.set(p.id, {
+              full_name: p.full_name,
+              avatar_url: p.avatar_url,
+              member_number: p.member_number,
+            });
+          }
+        }
+
+        pendingIdsRef.current.clear();
+        const events = pendingEventsRef.current.splice(0);
+
+        for (const evt of events) {
+          const profile = profileCacheRef.current.get(evt.row.profile_id) ?? null;
+          const player: SessionPlayer = {
+            id: evt.row.id,
+            profile_id: evt.row.profile_id,
+            is_ready: evt.row.is_ready,
+            joined_at: evt.row.joined_at,
+            profiles: profile,
+          };
+          if (evt.kind === 'JOIN') {
+            console.log('[READY_CHECK] PLAYER_JOINED enriquecido | name:', profile?.full_name ?? 'N/A', '| is_ready:', evt.row.is_ready);
+            dispatch({ type: 'PLAYER_JOINED', payload: player });
+          } else {
+            console.log('[READY_CHECK] PLAYER_UPDATED enriquecido | name:', profile?.full_name ?? 'N/A', '| is_ready:', evt.row.is_ready);
+            dispatch({ type: 'PLAYER_UPDATED', payload: player });
+          }
+        }
+      }, 300);
+    };
 
     fetchSessionWithPlayers(sessionId)
       .then((s) => {
-        if (!alive) return;
+        if (!aliveRef.current) return;
         const derivedPhase = derivePhase(s.status);
         console.log(
           '[GAME_STATE] session cargada desde DB | status:', s.status,
@@ -194,10 +265,15 @@ export function useGameEngine(sessionId: string, profileId: string) {
           const computed = computeSecondsLeft(s.started_at);
           console.log('[TIMER_SYNC] session ya activa al cargar | started_at:', s.started_at, '| secondsLeft calculado:', computed);
         }
+        for (const player of s.players) {
+          if (player.profiles) {
+            profileCacheRef.current.set(player.profile_id, player.profiles);
+          }
+        }
         dispatch({ type: 'LOAD_SUCCESS', payload: s });
       })
       .catch((e: Error) => {
-        if (!alive) return;
+        if (!aliveRef.current) return;
         console.log('[GAME_STATE] ERROR cargando sesión:', e.message);
         dispatch({ type: 'LOAD_ERROR', payload: e.message ?? 'Error' });
       });
@@ -208,7 +284,7 @@ export function useGameEngine(sessionId: string, profileId: string) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'game_sessions', filter: `id=eq.${sessionId}` },
         (payload) => {
-          if (!alive) return;
+          if (!aliveRef.current) return;
           console.log(
             '[GAME_STATE] realtime SESSION_UPDATED | nuevo status:', payload.new.status,
             '| started_at:', payload.new.started_at ?? 'null',
@@ -239,44 +315,32 @@ export function useGameEngine(sessionId: string, profileId: string) {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'table_players', filter: `session_id=eq.${sessionId}` },
-        async (payload) => {
-          if (!alive) return;
-          console.log('[READY_CHECK] realtime PLAYER_JOINED | raw profile_id:', payload.new.profile_id);
-          const { data } = await supabase
-            .from('table_players')
-            .select('id, profile_id, is_ready, joined_at, profiles(full_name, avatar_url, member_number)')
-            .eq('id', payload.new.id)
-            .single();
-          if (alive && data) {
-            const p = data as SessionPlayer;
-            console.log('[READY_CHECK] PLAYER_JOINED enriquecido | name:', p.profiles?.full_name ?? 'N/A', '| is_ready:', p.is_ready);
-            dispatch({ type: 'PLAYER_JOINED', payload: p });
-          }
+        (payload) => {
+          if (!aliveRef.current) return;
+          const row = payload.new as { id: string; profile_id: string; is_ready: boolean; joined_at: string };
+          console.log('[READY_CHECK] realtime PLAYER_JOINED | raw profile_id:', row.profile_id);
+          pendingEventsRef.current.push({ kind: 'JOIN', row });
+          pendingIdsRef.current.add(row.profile_id);
+          scheduleFlush();
         }
       )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'table_players', filter: `session_id=eq.${sessionId}` },
-        async (payload) => {
-          if (!alive) return;
-          console.log('[READY_CHECK] realtime PLAYER_UPDATED | profile_id:', payload.new.profile_id, '| is_ready:', payload.new.is_ready);
-          const { data } = await supabase
-            .from('table_players')
-            .select('id, profile_id, is_ready, joined_at, profiles(full_name, avatar_url, member_number)')
-            .eq('id', payload.new.id)
-            .single();
-          if (alive && data) {
-            const p = data as SessionPlayer;
-            console.log('[READY_CHECK] PLAYER_UPDATED enriquecido | name:', p.profiles?.full_name ?? 'N/A', '| is_ready:', p.is_ready);
-            dispatch({ type: 'PLAYER_UPDATED', payload: p });
-          }
+        (payload) => {
+          if (!aliveRef.current) return;
+          const row = payload.new as { id: string; profile_id: string; is_ready: boolean; joined_at: string };
+          console.log('[READY_CHECK] realtime PLAYER_UPDATED | profile_id:', row.profile_id, '| is_ready:', row.is_ready);
+          pendingEventsRef.current.push({ kind: 'UPDATE', row });
+          pendingIdsRef.current.add(row.profile_id);
+          scheduleFlush();
         }
       )
       .on(
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'table_players', filter: `session_id=eq.${sessionId}` },
         (payload) => {
-          if (!alive) return;
+          if (!aliveRef.current) return;
           console.log('[READY_CHECK] realtime PLAYER_LEFT | table_players.id:', payload.old.id);
           dispatch({ type: 'PLAYER_LEFT', payload: { id: payload.old.id as string } });
         }
@@ -284,7 +348,8 @@ export function useGameEngine(sessionId: string, profileId: string) {
       .subscribe();
 
     return () => {
-      alive = false;
+      aliveRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(sessionCh);
       supabase.removeChannel(playersCh);
     };
@@ -327,7 +392,7 @@ export function useGameEngine(sessionId: string, profileId: string) {
 
   const allReady =
     state.session !== null &&
-    state.session.players.length === 6 &&
+    state.session.players.length >= 1 &&
     state.session.players.every((p) => p.is_ready);
 
   const amReady =
@@ -345,7 +410,7 @@ export function useGameEngine(sessionId: string, profileId: string) {
       )
     );
     dispatch({ type: 'LOAD_SUCCESS', payload: fresh });
-    const nowAllReady = fresh.players.length === 6 && fresh.players.every((p) => p.is_ready);
+    const nowAllReady = fresh.players.length >= 1 && fresh.players.every((p) => p.is_ready);
     console.log('[READY_CHECK] nowAllReady:', nowAllReady, '| fresh.status:', fresh.status);
     if (nowAllReady && fresh.status === 'pending') {
       console.log('[READY_CHECK] TODOS LISTOS → disparando startSession | sessionId:', sessionId);

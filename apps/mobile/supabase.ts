@@ -40,15 +40,23 @@ export const sendInvitation = async (eventId: string, senderId: string, receiver
   return data.id as string;
 };
 
-export type ActiveEventRow = { id: string; title: string; passline_url: string | null };
+export type ActiveEventRow = {
+  id: string;
+  title: string;
+  passline_url: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  location: string | null;
+  capacity: number | null;
+};
 
-/** Próximo evento con starts_at en el futuro; si no hay ninguno, el más reciente por starts_at. */
 export const fetchActiveEvent = async (): Promise<ActiveEventRow | null> => {
   const now = new Date().toISOString();
+  const FIELDS = 'id, title, passline_url, starts_at, ends_at, location, capacity';
 
   const { data: upcoming, error: errUp } = await supabase
     .from('events')
-    .select('id, title, passline_url')
+    .select(FIELDS)
     .gte('starts_at', now)
     .order('starts_at', { ascending: true })
     .limit(1)
@@ -59,13 +67,22 @@ export const fetchActiveEvent = async (): Promise<ActiveEventRow | null> => {
 
   const { data: latest, error: errLatest } = await supabase
     .from('events')
-    .select('id, title, passline_url')
+    .select(FIELDS)
     .order('starts_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (errLatest) throw errLatest;
   return (latest as ActiveEventRow | null) ?? null;
+};
+
+export const getConfirmedTeamsCount = async (eventId: string): Promise<number> => {
+  const { count, error } = await supabase
+    .from('event_teams')
+    .select('*', { count: 'exact', head: true })
+    .eq('event_id', eventId);
+  if (error) throw error;
+  return count ?? 0;
 };
 
 export const getPendingInvitations = async (userId: string, eventId: string) => {
@@ -332,15 +349,10 @@ export const leaveSession = async (sessionId: string, profileId: string): Promis
 };
 
 export const endSession = async (sessionId: string): Promise<void> => {
-  const clientTimestamp = new Date().toISOString();
-  console.log('[TIMER_SYNC] endSession DB call | sessionId:', sessionId, '| ended_at cliente:', clientTimestamp);
-  const { error } = await supabase
-    .from('game_sessions')
-    .update({ status: 'completed', ended_at: clientTimestamp })
-    .eq('id', sessionId)
-    .eq('status', 'in_progress');
+  console.log('[TIMER_SYNC] endSession RPC | sessionId:', sessionId);
+  const { error } = await supabase.rpc('end_game_session', { p_session_id: sessionId });
   if (error) throw error;
-  console.log('[TIMER_SYNC] endSession OK → sesión marcada completed');
+  console.log('[TIMER_SYNC] endSession RPC OK');
 };
 
 function shuffle<T>(arr: T[]): T[] {

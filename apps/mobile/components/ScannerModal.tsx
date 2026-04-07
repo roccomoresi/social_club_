@@ -30,7 +30,6 @@ export const ScannerModal = ({ visible, onClose, onScan }: ScannerModalProps) =>
     <Modal visible={visible} animationType="slide" transparent={false}>
       <View style={styles.container}>
         {!permission.granted ? (
-          /* ── Sin permiso de cámara ── */
           <View style={styles.permissionScreen}>
             <Text style={styles.permissionTitle}>ACCESO A CÁMARA</Text>
             <View style={styles.permissionDivider} />
@@ -45,21 +44,17 @@ export const ScannerModal = ({ visible, onClose, onScan }: ScannerModalProps) =>
             </Pressable>
           </View>
         ) : (
-          /* ── Visor de cámara ── */
-          <CameraView
-            style={StyleSheet.absoluteFillObject}
-            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-          >
+          <View style={styles.cameraWrapper}>
+            <CameraView
+              style={StyleSheet.absoluteFillObject}
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            />
             <View style={styles.overlay}>
-              {/* Zona oscura superior */}
               <View style={styles.dimZone} />
-
-              {/* Fila central: sombra | ventana | sombra */}
               <View style={styles.scanRow}>
                 <View style={styles.dimZone} />
                 <View style={styles.scanWindow}>
-                  {/* Esquinas decorativas */}
                   <View style={[styles.corner, styles.cornerTL]} />
                   <View style={[styles.corner, styles.cornerTR]} />
                   <View style={[styles.corner, styles.cornerBL]} />
@@ -67,8 +62,6 @@ export const ScannerModal = ({ visible, onClose, onScan }: ScannerModalProps) =>
                 </View>
                 <View style={styles.dimZone} />
               </View>
-
-              {/* Zona oscura inferior con instrucción y botón */}
               <View style={[styles.dimZone, styles.bottomZone]}>
                 <Text style={styles.instruction}>APUNTÁ AL QR DEL SOCIO</Text>
                 <Pressable style={styles.closeButton} onPress={onClose}>
@@ -76,7 +69,7 @@ export const ScannerModal = ({ visible, onClose, onScan }: ScannerModalProps) =>
                 </Pressable>
               </View>
             </View>
-          </CameraView>
+          </View>
         )}
       </View>
     </Modal>
@@ -93,7 +86,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
 
-  // ── Sin permiso ──
   permissionScreen: {
     flex: 1,
     alignItems: 'center',
@@ -144,9 +136,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // ── Overlay de cámara ──
-  overlay: {
+  cameraWrapper: {
     flex: 1,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'column',
   },
   dimZone: {
     flex: 1,
@@ -185,7 +180,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  // ── Esquinas del visor ──
   corner: {
     position: 'absolute',
     width: CORNER_SIZE,

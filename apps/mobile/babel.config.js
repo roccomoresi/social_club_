@@ -3,7 +3,7 @@ module.exports = function(api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      'nativewind/babel' // Mantené el de nativewind, pero borrá el de expo-router
+      'nativewind/babel',
     ],
   };
 };

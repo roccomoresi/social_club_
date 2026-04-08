@@ -25,7 +25,7 @@ export default function HomeScreen() {
         return;
       }
       const { sessionId } = await assignTableForRound(user.id, event.id, 1);
-      router.push(`/game?sessionId=${sessionId}`);
+      router.push(`/game/${sessionId}`);
     } catch (e: unknown) {
       Alert.alert('Error', e instanceof Error ? e.message : 'No pudimos asignarte una mesa.');
     } finally {

@@ -79,6 +79,15 @@ BEGIN
       AND gs.table_number = v_table_num;
 
     IF v_session_id IS NOT NULL THEN
+      IF EXISTS (
+        SELECT 1 FROM table_players tp_check
+        WHERE tp_check.session_id = v_session_id
+          AND tp_check.profile_id = ANY(v_dupla_members)
+      ) THEN
+        v_session_id := NULL;
+        CONTINUE;
+      END IF;
+
       SELECT COUNT(DISTINCT et.id) INTO v_dupla_count
       FROM table_players tp
       JOIN event_teams et ON et.event_id = p_event_id

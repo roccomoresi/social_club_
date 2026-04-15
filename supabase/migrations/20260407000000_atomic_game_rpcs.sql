@@ -6,6 +6,7 @@ CREATE OR REPLACE FUNCTION assign_player_to_table(
 RETURNS TABLE(session_id uuid, table_number integer)
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_round_id       uuid;
@@ -17,6 +18,9 @@ DECLARE
   v_table_number   integer;
   v_dupla_count    integer;
   v_has_conflict   boolean;
+  v_prev_table     integer;
+  v_start_table    integer;
+  i                integer;
 BEGIN
   PERFORM pg_advisory_xact_lock(
     ('x' || md5(p_event_id::text || ':' || p_round_number::text))::bit(64)::bigint
@@ -26,15 +30,15 @@ BEGIN
   VALUES (p_event_id, p_round_number)
   ON CONFLICT (event_id, round_number) DO NOTHING;
 
-  SELECT id INTO v_round_id
-  FROM event_rounds
-  WHERE event_id = p_event_id
-    AND round_number = p_round_number;
+  SELECT er.id INTO v_round_id
+  FROM event_rounds er
+  WHERE er.event_id = p_event_id
+    AND er.round_number = p_round_number;
 
   IF NOT EXISTS (
-    SELECT 1 FROM event_teams
-    WHERE event_id = p_event_id
-      AND (player1_id = p_user_id OR player2_id = p_user_id)
+    SELECT 1 FROM event_teams et
+    WHERE et.event_id = p_event_id
+      AND (et.player1_id = p_user_id OR et.player2_id = p_user_id)
   ) THEN
     INSERT INTO event_teams (event_id, player1_id, is_solo_pool, passline_unlocked)
     VALUES (p_event_id, p_user_id, true, true)
@@ -42,11 +46,11 @@ BEGIN
   END IF;
 
   SELECT
-    CASE WHEN player1_id = p_user_id THEN player2_id ELSE player1_id END
+    CASE WHEN et.player1_id = p_user_id THEN et.player2_id ELSE et.player1_id END
   INTO v_partner_id
-  FROM event_teams
-  WHERE event_id = p_event_id
-    AND (player1_id = p_user_id OR player2_id = p_user_id)
+  FROM event_teams et
+  WHERE et.event_id = p_event_id
+    AND (et.player1_id = p_user_id OR et.player2_id = p_user_id)
   LIMIT 1;
 
   IF v_partner_id IS NOT NULL THEN
@@ -71,7 +75,20 @@ BEGIN
       );
   END IF;
 
-  FOR v_table_num IN 1..10 LOOP
+  SELECT gs.table_number INTO v_prev_table
+  FROM table_players tp
+  JOIN game_sessions gs ON gs.id = tp.session_id
+  JOIN event_rounds er ON er.id = gs.round_id
+  WHERE tp.profile_id = p_user_id
+    AND er.event_id = p_event_id
+    AND er.round_number = p_round_number - 1
+  LIMIT 1;
+
+  v_start_table := COALESCE((v_prev_table % 10) + 1, 1);
+
+  FOR i IN 0..9 LOOP
+    v_table_num := ((v_start_table - 1 + i) % 10) + 1;
+
     SELECT gs.id, gs.table_number
     INTO v_session_id, v_table_number
     FROM game_sessions gs
@@ -79,6 +96,15 @@ BEGIN
       AND gs.table_number = v_table_num;
 
     IF v_session_id IS NOT NULL THEN
+      IF EXISTS (
+        SELECT 1 FROM table_players tp_check
+        WHERE tp_check.session_id = v_session_id
+          AND tp_check.profile_id = ANY(v_dupla_members)
+      ) THEN
+        v_session_id := NULL;
+        CONTINUE;
+      END IF;
+
       SELECT COUNT(DISTINCT et.id) INTO v_dupla_count
       FROM table_players tp
       JOIN event_teams et ON et.event_id = p_event_id
@@ -91,9 +117,9 @@ BEGIN
       END IF;
 
       SELECT EXISTS (
-        SELECT 1 FROM table_players
-        WHERE session_id = v_session_id
-          AND profile_id = ANY(v_met_ids)
+        SELECT 1 FROM table_players tp_met
+        WHERE tp_met.session_id = v_session_id
+          AND tp_met.profile_id = ANY(v_met_ids)
       ) INTO v_has_conflict;
 
       IF v_has_conflict THEN
@@ -103,7 +129,7 @@ BEGIN
 
       INSERT INTO table_players (session_id, profile_id)
       SELECT v_session_id, unnest(v_dupla_members)
-      ON CONFLICT (session_id, profile_id) DO NOTHING;
+      ON CONFLICT ON CONSTRAINT table_players_session_profile_unique DO NOTHING;
 
       RETURN QUERY SELECT v_session_id, v_table_number;
       RETURN;
@@ -115,7 +141,7 @@ BEGIN
 
       INSERT INTO table_players (session_id, profile_id)
       SELECT v_session_id, unnest(v_dupla_members)
-      ON CONFLICT (session_id, profile_id) DO NOTHING;
+      ON CONFLICT ON CONSTRAINT table_players_session_profile_unique DO NOTHING;
 
       RETURN QUERY SELECT v_session_id, v_table_number;
       RETURN;
@@ -135,7 +161,7 @@ BEGIN
 
   INSERT INTO table_players (session_id, profile_id)
   SELECT v_session_id, unnest(v_dupla_members)
-  ON CONFLICT (session_id, profile_id) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT table_players_session_profile_unique DO NOTHING;
 
   RETURN QUERY SELECT v_session_id, v_table_number;
 END;
@@ -146,6 +172,7 @@ CREATE OR REPLACE FUNCTION end_game_session(p_session_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   UPDATE game_sessions

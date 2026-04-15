@@ -10,7 +10,8 @@
       "Bash(taskkill /F /IM node.exe)",
       "Bash(Get-Content:*)",
       "Bash(netstat -ano)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(ls -la /c/Users/rocco/Documents/GitHub/social_club_/apps/mobile/supabase*)"
     ]
   }
 }

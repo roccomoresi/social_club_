@@ -66,7 +66,7 @@ export default function AppGroupLayout() {
         }}
       />
       <Tabs.Screen
-        name="game"
+        name="game/[sessionId]"
         options={{
           href: null,
           tabBarStyle: { display: 'none' },

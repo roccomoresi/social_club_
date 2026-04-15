@@ -152,18 +152,16 @@ function reducer(state: State, action: Action): State {
   }
 }
 
-const initialState: State = {
-  session: null,
-  pistas: [],
-  votes: {},
-  secondsLeft: ROUND_SECONDS,
-  phase: 'waiting',
-  loading: true,
-  error: null,
-};
-
 export function useGameEngine(sessionId: string, profileId: string) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, undefined, () => ({
+    session: null,
+    pistas: [],
+    votes: {},
+    secondsLeft: ROUND_SECONDS,
+    phase: 'waiting' as GamePhase,
+    loading: true,
+    error: null,
+  }));
   const prevPhaseRef = useRef<GamePhase | 'loading'>('loading');
   const aliveRef = useRef(true);
   const profileCacheRef = useRef(new Map<string, ProfileData>());

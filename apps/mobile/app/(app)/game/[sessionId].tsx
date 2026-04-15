@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useAuth } from '../../contexts/AuthContext';
-import { useGameEngine } from '../../hooks/useGameEngine';
-import { MemberAvatar } from '../../components/MemberAvatar';
-import { assignTableForRound } from '../../services/matchmakingService';
-import { fetchActiveEvent, supabase } from '../../supabase';
+import { useAuth } from '../../../contexts/AuthContext';
+import { useGameEngine } from '../../../hooks/useGameEngine';
+import { MemberAvatar } from '../../../components/MemberAvatar';
+import { assignTableForRound } from '../../../services/matchmakingService';
+import { fetchActiveEvent, supabase } from '../../../supabase';
 
 const TOTAL_ROUNDS = 5;
 const ROUND_SECONDS = 15 * 60;
@@ -19,8 +19,9 @@ function formatTime(s: number): string {
 
 export default function GameScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const isAdmin = profile?.role === 'admin';
   const engine = useGameEngine(sessionId ?? '', user?.id ?? '');
 
   const [readying, setReadying] = useState(false);
@@ -28,6 +29,7 @@ export default function GameScreen() {
   const [nextAssignment, setNextAssignment] = useState<{ sessionId: string; tableNumber: number } | null>(null);
   const [debugFilling, setDebugFilling] = useState(false);
   const [forceEnding, setForceEnding] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     console.log(
@@ -41,6 +43,10 @@ export default function GameScreen() {
       })
     );
   }, [engine.phase, engine.loading]);
+
+  useEffect(() => {
+    setNextAssignment(null);
+  }, [sessionId]);
 
   useEffect(() => {
     if (engine.pistas.length > 0) {
@@ -139,6 +145,30 @@ export default function GameScreen() {
     } finally {
       setAssigning(false);
     }
+  }
+
+  async function resetDev() {
+    Alert.alert('Reset dev', '¿Limpiar toda la BDD de juego?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Resetear', style: 'destructive',
+        onPress: async () => {
+          setResetting(true);
+          try {
+            await supabase.from('round_votes').delete().neq('session_id', '00000000-0000-0000-0000-000000000000');
+            await supabase.from('table_players').delete().neq('session_id', '00000000-0000-0000-0000-000000000000');
+            await supabase.from('game_sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            await supabase.from('event_invitations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            await supabase.from('event_teams').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            router.replace('/home');
+          } catch (e: unknown) {
+            Alert.alert('Error', e instanceof Error ? e.message : 'No pudimos resetear.');
+          } finally {
+            setResetting(false);
+          }
+        },
+      },
+    ]);
   }
 
   if (engine.loading) {
@@ -557,7 +587,11 @@ export default function GameScreen() {
               <Text className="mt-2 text-xs text-zinc-500">Diríjanse a esa mesa</Text>
             </View>
             <Pressable
-              onPress={() => router.replace(`/game?sessionId=${nextAssignment.sessionId}`)}
+              onPress={() => {
+                console.log('[DEBUG] sessionId actual:', sessionId);
+                console.log('[DEBUG] nextAssignment.sessionId:', nextAssignment.sessionId);
+                router.replace(`/game/${nextAssignment.sessionId}`);
+              }}
               className="min-h-[52px] items-center justify-center rounded-2xl bg-white active:opacity-90"
             >
               <Text className="text-sm font-black uppercase tracking-[2] text-black">
@@ -585,6 +619,19 @@ export default function GameScreen() {
               </Text>
             </Pressable>
           </View>
+        )}
+        {isAdmin && (
+          <Pressable
+            onPress={resetDev}
+            disabled={resetting}
+            className="mt-6 h-10 items-center justify-center rounded-xl border border-red-900/50 bg-red-950/30 disabled:opacity-40"
+          >
+            {resetting ? (
+              <ActivityIndicator color="#ef4444" size="small" />
+            ) : (
+              <Text className="text-[10px] font-bold tracking-[3px] text-red-500">RESET DEV</Text>
+            )}
+          </Pressable>
         )}
       </ScrollView>
     </SafeAreaView>
